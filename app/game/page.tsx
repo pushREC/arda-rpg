@@ -6,19 +6,46 @@ import { GameShell } from "@/components/game-shell"
 import { StoryDisplay } from "@/components/story-display"
 import { DiceRoller } from "@/components/dice-roller"
 import { CharacterPanel } from "@/components/character-panel"
+import { CharacterDrawer } from "@/components/character-drawer"
 import { AchievementToast } from "@/components/achievement-toast"
 import { AchievementsModal } from "@/components/achievements-modal"
 import { ScenarioAdjustmentPanel } from "@/components/scenario-adjustment-panel"
+import { GameOverModal } from "@/components/game-over-modal"
+import { VictoryScreen } from "@/components/victory-screen"
+import { ItemDetailModal } from "@/components/item-detail-modal"
+import { SaveLoadModal } from "@/components/save-load-modal"
+import { QuestTracker } from "@/components/quest-tracker"
+import { LevelUpModal } from "@/components/level-up-modal"
 import type { StoryEntry, EnhancedChoice, StatType, CustomScenarioConfig } from "@/lib/types"
 import { toast } from "sonner"
 import { unlockAchievement, getAchievementById } from "@/lib/achievements"
+import {
+  useItem as applyItem, // Rename to avoid React hook linter confusion
+  equipItem,
+  saveGame,
+  loadGame,
+  autoSave,
+  loadAutoSave,
+  checkLevelUp,
+  detectQuestCompletion,
+  parseStateChanges,
+  canAddToInventory,
+  validateAIResponse,
+  validateGameData,
+} from "@/lib/game-logic"
+import { modalQueue } from "@/lib/modal-queue"
+import { NotificationManager, useNotifications } from "@/components/notification-manager"
 
-export default function GamePage() {
+function GamePageContent() {
   const router = useRouter()
+  const { addNotification } = useNotifications()
+
   const [character, setCharacter] = React.useState<any>(null)
   const [scenario, setScenario] = React.useState<any>(null)
   const [storyEntries, setStoryEntries] = React.useState<StoryEntry[]>([])
   const [currentHealth, setCurrentHealth] = React.useState(100)
+  const [currentXP, setCurrentXP] = React.useState(0)
+  const [currentLevel, setCurrentLevel] = React.useState(1)
   const [showDiceRoller, setShowDiceRoller] = React.useState(false)
   const [diceConfig, setDiceConfig] = React.useState<{
     type: 6 | 8 | 10 | 12 | 20
@@ -39,24 +66,223 @@ export default function GamePage() {
     }>
   >([])
 
-  React.useEffect(() => {
-    const savedCharacter = localStorage.getItem("character")
-    const savedScenario = localStorage.getItem("scenario")
+  const [showCharacterDrawer, setShowCharacterDrawer] = React.useState(false)
+  const [showGameOver, setShowGameOver] = React.useState(false)
+  const [showVictory, setShowVictory] = React.useState(false)
+  const [showSaveLoad, setShowSaveLoad] = React.useState(false)
+  const [showLevelUp, setShowLevelUp] = React.useState(false)
+  const [activeEffects, setActiveEffects] = React.useState<any[]>([])
+  const [currentQueuedModal, setCurrentQueuedModal] = React.useState<any>(null)
+  const [retryCount, setRetryCount] = React.useState(0)
+  const [selectedItem, setSelectedItem] = React.useState<any>(null)
+  const [showItemDetail, setShowItemDetail] = React.useState(false)
+  const MAX_RETRIES = 3
+  const loadingTimeoutRef = React.useRef<NodeJS.Timeout>()
+  const [gameOverCause, setGameOverCause] = React.useState("")
 
-    if (!savedCharacter || !savedScenario) {
+  const isInCombat =
+    storyEntries.length > 0 && storyEntries[storyEntries.length - 1]?.text?.toLowerCase().includes("combat")
+
+  const handleUseItem = React.useCallback(
+    (item: any) => {
+      const result = applyItem(item, character, currentHealth)
+
+      if (result.success) {
+        toast.success(result.message)
+
+        if (result.healthChange) {
+          setCurrentHealth((prev) => prev + result.healthChange!)
+          addNotification("health", result.healthChange)
+        }
+
+        if (result.effect) {
+          setActiveEffects((prev) => [...prev, result.effect!])
+        }
+
+        const updatedInventory = character.inventory.filter((i: any) => i.id !== item.id)
+        const updatedCharacter = { ...character, inventory: updatedInventory }
+        setCharacter(updatedCharacter)
+        localStorage.setItem("character", JSON.stringify(updatedCharacter))
+      } else {
+        toast.error(result.message)
+      }
+    },
+    [character, currentHealth, addNotification],
+  )
+
+  const handleEquipItem = React.useCallback(
+    (item: any) => {
+      const updatedCharacter = equipItem(item, character)
+      setCharacter(updatedCharacter)
+      localStorage.setItem("character", JSON.stringify(updatedCharacter))
+
+      toast.success(item.equipped ? "Unequipped" : "Equipped", {
+        description: item.name,
+      })
+    },
+    [character],
+  )
+
+  const handleDropItem = React.useCallback(
+    (item: any) => {
+      const updatedInventory = character.inventory.filter((i: any) => i.id !== item.id)
+      const updatedCharacter = { ...character, inventory: updatedInventory }
+      setCharacter(updatedCharacter)
+      localStorage.setItem("character", JSON.stringify(updatedCharacter))
+
+      toast.info("Item dropped", {
+        description: item.name,
+      })
+    },
+    [character],
+  )
+
+  React.useEffect(() => {
+    const unsubscribe = modalQueue.subscribe((modal) => {
+      setCurrentQueuedModal(modal)
+
+      if (modal) {
+        switch (modal.type) {
+          case "levelUp":
+            setShowLevelUp(true)
+            break
+          case "gameOver":
+            setShowGameOver(true)
+            break
+          case "victory":
+            setShowVictory(true)
+            break
+        }
+      }
+    })
+
+    return unsubscribe
+  }, [])
+
+  React.useEffect(() => {
+    const validation = validateGameData()
+
+    if (!validation.valid) {
+      console.error("[v0] Game data validation failed:", validation.error)
+
+      const autoSaveData = loadAutoSave()
+      if (autoSaveData.success && autoSaveData.data) {
+        toast.info("Recovered from auto-save")
+        setCharacter(autoSaveData.data.character)
+        setScenario(autoSaveData.data.scenario)
+        setStoryEntries(autoSaveData.data.storyEntries || [])
+        setCurrentHealth(autoSaveData.data.health)
+        setCurrentXP(autoSaveData.data.currentXP || 0)
+        setCurrentLevel(autoSaveData.data.currentLevel || 1)
+        return
+      }
+
+      toast.error("Game data is missing or corrupted", {
+        description: "Returning to character creation",
+      })
       router.push("/character-creation")
       return
     }
 
-    const charData = JSON.parse(savedCharacter)
-    const scenarioData = JSON.parse(savedScenario)
+    setCharacter(validation.character)
+    setScenario(validation.scenario)
+    setCurrentHealth(validation.character.maxHealth)
 
-    setCharacter(charData)
-    setScenario(scenarioData)
-    setCurrentHealth(charData.maxHealth)
-
-    startGame(charData, scenarioData)
+    startGame(validation.character, validation.scenario)
   }, [router])
+
+  React.useEffect(() => {
+    if (character && scenario && storyEntries.length > 0) {
+      autoSave({
+        character,
+        scenario,
+        storyEntries,
+        health: currentHealth,
+        currentXP,
+        currentLevel,
+        choiceCount,
+        activeEffects,
+      })
+    }
+  }, [storyEntries, currentHealth, currentXP, currentLevel])
+
+  React.useEffect(() => {
+    if (currentHealth <= 0 && !showGameOver) {
+      setGameOverCause("Your health reached zero")
+      modalQueue.enqueue("gameOver", { cause: "Your health reached zero" }, 100)
+    }
+  }, [currentHealth, showGameOver])
+
+  React.useEffect(() => {
+    if (isLoading) {
+      loadingTimeoutRef.current = setTimeout(() => {
+        console.error("[v0] Loading timeout reached")
+        toast.error("Taking longer than expected", {
+          description: "The tale continues...",
+        })
+        setIsLoading(false)
+      }, 30000) // 30 second timeout
+    } else {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current)
+      }
+    }
+
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current)
+      }
+    }
+  }, [isLoading])
+
+  const handleSaveGame = React.useCallback(() => {
+    const result = saveGame({
+      id: Date.now().toString(),
+      characterName: character.name,
+      scenario: scenario.title,
+      timestamp: new Date(),
+      health: currentHealth,
+      maxHealth: character.maxHealth,
+      turnCount: storyEntries.filter((e) => e.type === "action").length,
+      character,
+      scenario,
+      storyEntries,
+      currentXP,
+      currentLevel,
+      choiceCount,
+      activeEffects,
+    })
+
+    if (result.success) {
+      toast.success("Game saved successfully")
+    } else {
+      toast.error("Failed to save game", {
+        description: result.error,
+      })
+    }
+  }, [character, scenario, storyEntries, currentHealth, currentXP, currentLevel, choiceCount, activeEffects])
+
+  const handleLoadGame = React.useCallback((saveId: string) => {
+    const result = loadGame(saveId)
+
+    if (result.success && result.data) {
+      setCharacter(result.data.character)
+      setScenario(result.data.scenario)
+      setStoryEntries(result.data.storyEntries || [])
+      setCurrentHealth(result.data.health)
+      setCurrentXP(result.data.currentXP || 0)
+      setCurrentLevel(result.data.currentLevel || 1)
+      setChoiceCount(result.data.choiceCount || 0)
+      setActiveEffects(result.data.activeEffects || [])
+
+      toast.success("Game loaded successfully")
+      setShowSaveLoad(false)
+    } else {
+      toast.error("Failed to load game", {
+        description: result.error,
+      })
+    }
+  }, [])
 
   const startGame = async (charData: any, scenarioData: any) => {
     setIsLoading(true)
@@ -64,7 +290,6 @@ export default function GamePage() {
     await new Promise((resolve) => setTimeout(resolve, 1000))
 
     if (scenarioData.customConfig) {
-      console.log("[v0] Starting custom scenario:", scenarioData.customConfig)
       await startCustomScenario(charData, scenarioData)
       return
     }
@@ -154,7 +379,9 @@ What will you do?`
         }),
       })
 
-      if (!response.ok) throw new Error("Failed to generate opening")
+      if (!response.ok) {
+        throw new Error(`Failed to generate opening: ${response.statusText}`)
+      }
 
       const { narrative, choices } = await response.json()
 
@@ -163,7 +390,10 @@ What will you do?`
       setIsLoading(false)
     } catch (error) {
       console.error("[v0] Failed to start custom scenario:", error)
-      // Fallback to basic opening
+      toast.error("Failed to start adventure", {
+        description: "Using fallback scenario. Please try again later.",
+      })
+
       addStoryEntry("narration", `${scenarioData.description}\n\nWhat will you do?`)
       setCurrentChoices([
         {
@@ -401,6 +631,8 @@ What will you do?`
 
   const continueCustomScenario = async (playerChoice: string) => {
     try {
+      setRetryCount(0)
+
       const response = await fetch("/api/process-turn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -410,27 +642,108 @@ What will you do?`
           storyHistory: storyEntries,
           playerChoice,
           customConfig: scenario.customConfig,
+          combatIntensity: scenario.customConfig?.combatFrequency,
+          tones: scenario.customConfig?.tones,
         }),
       })
 
-      if (!response.ok) throw new Error("Failed to process turn")
+      if (!response.ok) {
+        throw new Error(`Failed to process turn: ${response.statusText}`)
+      }
 
-      const { narrative, choices, stateChanges } = await response.json()
+      const data = await response.json()
 
-      // Apply state changes
-      if (stateChanges) {
-        if (stateChanges.health !== undefined) {
-          setCurrentHealth((prev) => Math.max(0, Math.min(character.maxHealth, prev + stateChanges.health)))
+      const validation = validateAIResponse(data)
+      if (!validation.valid) {
+        throw new Error(validation.error)
+      }
+
+      const { narrative, choices, stateChanges } = data
+
+      const parsedChanges = parseStateChanges(narrative)
+      const combinedChanges = { ...parsedChanges, ...stateChanges }
+
+      if (combinedChanges.health !== undefined) {
+        const healthChange = combinedChanges.health
+        setCurrentHealth((prev) => Math.max(0, Math.min(character.maxHealth, prev + healthChange)))
+
+        if (healthChange > 0) {
+          addNotification("health", healthChange)
+        } else if (healthChange < 0) {
+          addNotification("damage", Math.abs(healthChange))
         }
-        if (stateChanges.inventory) {
-          // Update character inventory in localStorage
+      }
+
+      if (combinedChanges.gold !== undefined) {
+        const goldChange = combinedChanges.gold
+        addNotification("gold", goldChange)
+
+        const updatedCharacter = {
+          ...character,
+          gold: (character.gold || 0) + goldChange,
+        }
+        setCharacter(updatedCharacter)
+        localStorage.setItem("character", JSON.stringify(updatedCharacter))
+      }
+
+      if (combinedChanges.xp !== undefined) {
+        const xpGain = combinedChanges.xp
+        const newXP = currentXP + xpGain
+
+        addNotification("xp", xpGain)
+        setCurrentXP(newXP)
+
+        const levelCheck = checkLevelUp(newXP, currentLevel)
+        if (levelCheck.leveledUp) {
+          setCurrentLevel(levelCheck.newLevel)
+          setCurrentXP(levelCheck.remainingXP)
+
+          modalQueue.enqueue(
+            "levelUp",
+            {
+              newLevel: levelCheck.newLevel,
+              statIncreases: { valor: 1, endurance: 1 },
+            },
+            80,
+          )
+        }
+      }
+
+      if (combinedChanges.inventory || combinedChanges.items) {
+        const itemsToAdd = combinedChanges.inventory || []
+
+        if (canAddToInventory(character.inventory)) {
           const updatedCharacter = {
             ...character,
-            inventory: [...character.inventory, ...stateChanges.inventory],
+            inventory: [...character.inventory, ...itemsToAdd],
           }
           setCharacter(updatedCharacter)
           localStorage.setItem("character", JSON.stringify(updatedCharacter))
+
+          itemsToAdd.forEach((item: any) => {
+            addNotification("item", item.name)
+          })
+        } else {
+          toast.warning("Inventory is full!", {
+            description: "Drop items to make space",
+          })
         }
+      }
+
+      const turnCount = storyEntries.filter((e) => e.type === "action").length + 1
+      if (combinedChanges.questComplete || detectQuestCompletion(narrative, turnCount, scenario)) {
+        modalQueue.enqueue(
+          "victory",
+          {
+            questName: scenario.title,
+            finalStats: {
+              turns: turnCount,
+              gold: character.gold || 0,
+              experience: currentXP,
+            },
+          },
+          100,
+        )
       }
 
       addStoryEntry("narration", narrative)
@@ -438,7 +751,33 @@ What will you do?`
       setIsLoading(false)
     } catch (error) {
       console.error("[v0] Failed to continue custom scenario:", error)
-      // Fallback response
+
+      if (retryCount < MAX_RETRIES) {
+        const nextRetry = retryCount + 1
+        setRetryCount(nextRetry)
+        const delay = Math.pow(2, nextRetry) * 1000 // 2s, 4s, 8s
+
+        toast.error(`Connection issue (Attempt ${nextRetry}/${MAX_RETRIES})`, {
+          description: `Retrying in ${delay / 1000}s...`,
+        })
+
+        setTimeout(() => {
+          continueCustomScenario(playerChoice)
+        }, delay)
+        return
+      }
+
+      toast.error("Connection issue", {
+        description: "The tale pauses momentarily.",
+        action: {
+          label: "Retry",
+          onClick: () => {
+            setRetryCount(0)
+            continueCustomScenario(playerChoice)
+          },
+        },
+      })
+
       addStoryEntry("narration", "The tale continues as you press forward into the unknown.")
       setCurrentChoices([
         {
@@ -501,7 +840,6 @@ What will you do?`
       reason,
     }
 
-    // Update scenario in localStorage
     const updatedScenario = {
       ...scenario,
       customConfig: {
@@ -514,25 +852,22 @@ What will you do?`
     setScenario(updatedScenario)
     localStorage.setItem("scenario", JSON.stringify(updatedScenario))
 
-    // Update local state
     setScenarioModifications([...scenarioModifications, modification])
 
-    // Show confirmation
     toast.success("Tale adjusted", {
       description: "Changes will take effect over the next few turns",
     })
 
-    // Add story entry
     addStoryEntry("narration", `[The tale's direction shifts subtly as ${reason.toLowerCase()}]`)
   }
 
-  const isInCombat =
-    storyEntries.length > 0 && storyEntries[storyEntries.length - 1]?.text?.toLowerCase().includes("combat")
-
   if (!character || !scenario) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      <div className="min-h-screen flex items-center justify-center bg-[hsl(50,50%,90%)]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin w-12 h-12 border-4 border-[hsl(30,50%,40%)] border-t-transparent rounded-full mx-auto" />
+          <p className="text-[hsl(25,50%,25%)] font-medium">Loading your adventure...</p>
+        </div>
       </div>
     )
   }
@@ -553,10 +888,24 @@ What will you do?`
         characterClass={character.race}
         health={currentHealth}
         maxHealth={character.maxHealth}
+        level={currentLevel}
+        onMenuClick={() => setShowCharacterDrawer(true)}
         onViewAchievements={() => setShowAchievements(true)}
+        onSaveGame={() => setShowSaveLoad(true)}
       >
         <div className="flex flex-1 overflow-hidden flex-col lg:flex-row">
           <div className="flex-1 flex flex-col overflow-hidden">
+            {scenario?.customConfig && (
+              <div className="p-4 pb-2">
+                <QuestTracker
+                  questName={scenario.customConfig.questHook || scenario.title}
+                  urgency={scenario.customConfig.urgency}
+                  stakes={scenario.customConfig.stakes}
+                  currentObjective="Continue your journey"
+                />
+              </div>
+            )}
+
             <StoryDisplay
               entries={storyEntries}
               currentChoices={currentChoices}
@@ -565,18 +914,37 @@ What will you do?`
               characterStats={characterStats}
             />
           </div>
-          <aside className="hidden lg:block lg:w-72 flex-shrink-0 border-l border-[hsl(35,40%,70%)] bg-[hsl(50,80%,95%)]">
+
+          <aside className="hidden lg:block lg:w-72 flex-shrink-0 border-l-2 border-[hsl(35,40%,70%)] bg-[hsl(50,80%,95%)]">
             <div className="h-full overflow-y-auto p-3">
               <CharacterPanel
                 character={character}
                 currentHealth={currentHealth}
                 onViewAchievements={() => setShowAchievements(true)}
+                onItemClick={(item) => {
+                  setSelectedItem(item)
+                  setShowItemDetail(true)
+                }}
               />
             </div>
           </aside>
         </div>
       </GameShell>
+
+      <CharacterDrawer
+        character={character}
+        currentHealth={currentHealth}
+        isOpen={showCharacterDrawer}
+        onClose={() => setShowCharacterDrawer(false)}
+        onViewAchievements={() => setShowAchievements(true)}
+        onItemClick={(item) => {
+          setSelectedItem(item)
+          setShowItemDetail(true)
+        }}
+      />
+
       {showAchievements && <AchievementsModal onClose={() => setShowAchievements(false)} />}
+
       {showDiceRoller && (
         <DiceRoller
           onRoll={handleDiceRoll}
@@ -593,6 +961,101 @@ What will you do?`
           statName={(diceConfig as any).statName}
         />
       )}
+
+      {showGameOver && (
+        <GameOverModal
+          isOpen={showGameOver}
+          cause={gameOverCause}
+          finalStats={{
+            turns: storyEntries.filter((e) => e.type === "action").length,
+            gold: character.gold || 0,
+          }}
+        />
+      )}
+
+      {showVictory && (
+        <VictoryScreen
+          isOpen={showVictory}
+          questName={scenario.title}
+          finalStats={{
+            turns: storyEntries.filter((e) => e.type === "action").length,
+            gold: character.gold || 0,
+            experience: currentXP,
+          }}
+        />
+      )}
+
+      {showSaveLoad && (
+        <SaveLoadModal
+          isOpen={showSaveLoad}
+          onClose={() => setShowSaveLoad(false)}
+          onSave={handleSaveGame}
+          onLoad={handleLoadGame}
+          currentSave={{
+            id: "current",
+            characterName: character.name,
+            scenario: scenario.title,
+            timestamp: new Date(),
+            health: currentHealth,
+            maxHealth: character.maxHealth,
+            turnCount: storyEntries.filter((e) => e.type === "action").length,
+          }}
+        />
+      )}
+
+      {showLevelUp && currentQueuedModal?.data && (
+        <LevelUpModal
+          isOpen={showLevelUp}
+          newLevel={currentQueuedModal.data.newLevel || currentLevel}
+          onClose={() => {
+            setShowLevelUp(false)
+            modalQueue.dismiss()
+          }}
+          statIncreases={currentQueuedModal.data.statIncreases || {}}
+        />
+      )}
+
+      {showItemDetail && selectedItem && (
+        <ItemDetailModal
+          isOpen={showItemDetail}
+          item={selectedItem}
+          onClose={() => {
+            setShowItemDetail(false)
+            setSelectedItem(null)
+          }}
+          onUse={
+            selectedItem.type === "potion" || selectedItem.consumable
+              ? () => {
+                  handleUseItem(selectedItem)
+                  setShowItemDetail(false)
+                  setSelectedItem(null)
+                }
+              : undefined
+          }
+          onEquip={
+            selectedItem.type === "weapon" || selectedItem.type === "armor"
+              ? () => {
+                  handleEquipItem(selectedItem)
+                  setShowItemDetail(false)
+                  setSelectedItem(null)
+                }
+              : undefined
+          }
+          onDrop={() => {
+            handleDropItem(selectedItem)
+            setShowItemDetail(false)
+            setSelectedItem(null)
+          }}
+        />
+      )}
     </>
+  )
+}
+
+export default function GamePage() {
+  return (
+    <NotificationManager>
+      <GamePageContent />
+    </NotificationManager>
   )
 }

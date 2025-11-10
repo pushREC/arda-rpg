@@ -21,21 +21,31 @@ import {
 import * as React from "react"
 import { GameModal } from "./game-modal"
 import { InventoryItemCard } from "./inventory-item"
+import { ItemDetailModal } from "./item-detail-modal"
 
 interface CharacterPanelProps {
   character: any
   currentHealth: number
   className?: string
   onViewAchievements?: () => void
+  onItemClick?: (item: any) => void
 }
 
-export function CharacterPanel({ character, currentHealth, className, onViewAchievements }: CharacterPanelProps) {
+export function CharacterPanel({
+  character,
+  currentHealth,
+  className,
+  onViewAchievements,
+  onItemClick,
+}: CharacterPanelProps) {
   console.log("[v0] CharacterPanel received character:", character)
 
   const [abilityExpanded, setAbilityExpanded] = React.useState(false)
   const [showInventoryModal, setShowInventoryModal] = React.useState(false)
   const [showStatsModal, setShowStatsModal] = React.useState(false)
   const [showAchievementsModal, setShowAchievementsModal] = React.useState(false)
+  const [selectedItem, setSelectedItem] = React.useState<any>(null)
+  const [showItemDetail, setShowItemDetail] = React.useState(false)
 
   const healthPercentage = (currentHealth / character.maxHealth) * 100
   const level = 1
@@ -47,6 +57,18 @@ export function CharacterPanel({ character, currentHealth, className, onViewAchi
   const backgroundName = character.background
     ? character.background.charAt(0).toUpperCase() + character.background.slice(1)
     : ""
+
+  const handleItemClick = React.useCallback(
+    (item: any) => {
+      if (onItemClick) {
+        onItemClick(item)
+      } else {
+        setSelectedItem(item)
+        setShowItemDetail(true)
+      }
+    },
+    [onItemClick],
+  )
 
   return (
     <>
@@ -193,7 +215,15 @@ export function CharacterPanel({ character, currentHealth, className, onViewAchi
             {character.inventory && character.inventory.length > 0
               ? character.inventory
                   .slice(0, 4)
-                  .map((item) => <InventoryItemCard key={item.id} item={item} size="sm" interactive />)
+                  .map((item: any) => (
+                    <InventoryItemCard
+                      key={item.id}
+                      item={item}
+                      size="sm"
+                      interactive
+                      onClick={() => handleItemClick(item)}
+                    />
+                  ))
               : // Empty slots fallback
                 [1, 2, 3, 4].map((i) => <InventoryItemCard key={i} size="sm" />)}
           </div>
@@ -236,7 +266,6 @@ export function CharacterPanel({ character, currentHealth, className, onViewAchi
 
       <GameModal isOpen={showInventoryModal} onClose={() => setShowInventoryModal(false)} title="Inventory">
         <div className="space-y-6">
-          {/* Dynamic grid based on item count */}
           {character.inventory && character.inventory.length > 0 ? (
             <div
               className={`grid gap-4 ${
@@ -247,8 +276,14 @@ export function CharacterPanel({ character, currentHealth, className, onViewAchi
                     : "grid-cols-6"
               }`}
             >
-              {character.inventory.map((item) => (
-                <InventoryItemCard key={item.id} item={item} size="lg" interactive />
+              {character.inventory.map((item: any) => (
+                <InventoryItemCard
+                  key={item.id}
+                  item={item}
+                  size="lg"
+                  interactive
+                  onClick={() => handleItemClick(item)}
+                />
               ))}
             </div>
           ) : (
@@ -332,6 +367,29 @@ export function CharacterPanel({ character, currentHealth, className, onViewAchi
           </div>
         </div>
       </GameModal>
+
+      {!onItemClick && (
+        <ItemDetailModal
+          isOpen={showItemDetail}
+          onClose={() => {
+            setShowItemDetail(false)
+            setSelectedItem(null)
+          }}
+          item={selectedItem}
+          onUse={(item) => {
+            console.log("[v0] Using item:", item)
+            setShowItemDetail(false)
+          }}
+          onEquip={(item) => {
+            console.log("[v0] Equipping item:", item)
+            setShowItemDetail(false)
+          }}
+          onDrop={(item) => {
+            console.log("[v0] Dropping item:", item)
+            setShowItemDetail(false)
+          }}
+        />
+      )}
     </>
   )
 }

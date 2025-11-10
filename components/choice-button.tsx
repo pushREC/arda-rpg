@@ -84,7 +84,7 @@ export function ChoiceButton({ choice, characterStats, onClick, index = 0, selec
   return (
     <Button
       variant="outline"
-      className={`justify-between h-auto py-3 px-4 text-left hover:bg-primary/10 hover:border-primary hover:-translate-y-0.5 transition-all duration-200 border-2 shadow-button-primary hover:shadow-button-hover group w-full ${
+      className={`justify-between h-auto py-3 px-3 md:px-4 text-left hover:bg-primary/10 hover:border-primary hover:-translate-y-0.5 transition-all duration-200 border-2 shadow-button-primary hover:shadow-button-hover group w-full ${
         selected
           ? "bg-[hsl(35,60%,88%)] border-[hsl(30,50%,40%)] shadow-card-hover"
           : "bg-transparent border-[hsl(30,40%,20%)]"
@@ -92,9 +92,9 @@ export function ChoiceButton({ choice, characterStats, onClick, index = 0, selec
       onClick={onClick}
       style={{ animationDelay: `${index * 0.1}s` }}
     >
-      <div className="flex items-center gap-3 flex-1 min-w-0">
+      <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
         <div
-          className={`flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center ${
+          className={`flex-shrink-0 w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center ${
             selected
               ? "bg-[hsl(30,50%,40%)] border border-[hsl(30,50%,40%)]"
               : choice.requiresRoll
@@ -105,31 +105,36 @@ export function ChoiceButton({ choice, characterStats, onClick, index = 0, selec
           {selected ? (
             <Check className="h-4 w-4 text-white" />
           ) : (
-            <ActionIcon className={`h-4 w-4 ${choice.requiresRoll ? "text-amber-700" : "text-slate-600"}`} />
+            <ActionIcon
+              className={`h-3.5 w-3.5 md:h-4 md:w-4 ${choice.requiresRoll ? "text-amber-700" : "text-slate-600"}`}
+            />
           )}
         </div>
 
         {/* Choice Text */}
         <div className="flex-1 min-w-0">
-          <span className="text-pretty block">{choice.text}</span>
+          <span className="text-pretty block text-sm md:text-base">{choice.text}</span>
 
           {/* Show consequence hint if exists */}
           {choice.consequence && (
-            <span className="text-xs text-muted-foreground italic block mt-1 text-pretty">{choice.consequence}</span>
+            <span className="text-xs text-muted-foreground italic block mt-1 text-pretty hidden sm:block">
+              {choice.consequence}
+            </span>
           )}
         </div>
 
-        {/* Stat Badge (if roll required) */}
         {choice.requiresRoll && choice.stat && StatIcon && characterStats && (
-          <div className="flex-shrink-0 flex items-center gap-2 text-xs">
-            <div className="flex items-center gap-1 px-2 py-1 rounded bg-[hsl(50,80%,92%)] border border-[hsl(35,40%,70%)]">
+          <div className="flex-shrink-0 flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-2 text-xs">
+            <div className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded bg-[hsl(50,80%,92%)] border border-[hsl(35,40%,70%)]">
               <Dices className="h-3 w-3 text-[hsl(35,40%,40%)]" />
-              <span className="font-medium text-[hsl(35,40%,30%)]">{statNames[choice.stat]}</span>
+              <span className="font-medium text-[hsl(35,40%,30%)] text-[10px] sm:text-xs">
+                {statNames[choice.stat]}
+              </span>
             </div>
 
             {getSuccessProbability !== null && (
               <div
-                className={`px-2 py-1 rounded font-semibold text-xs ${
+                className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded font-semibold text-[10px] sm:text-xs whitespace-nowrap ${
                   getSuccessProbability >= 70
                     ? "bg-green-100 text-green-700 border border-green-300"
                     : getSuccessProbability >= 40
@@ -137,7 +142,7 @@ export function ChoiceButton({ choice, characterStats, onClick, index = 0, selec
                       : "bg-red-100 text-red-700 border border-red-300"
                 }`}
               >
-                {getSuccessProbability}% chance
+                {getSuccessProbability}%
               </div>
             )}
           </div>

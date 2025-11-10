@@ -2,10 +2,8 @@
 
 import * as React from "react"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Heart, Shield, Swords, Sparkles, Volume2, VolumeX, Menu, Trophy } from "lucide-react"
+import { Heart, Volume2, VolumeX, Menu, Trophy, Save } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { AchievementsModal } from "./achievements-modal"
 
 interface GameShellProps {
   children?: React.ReactNode
@@ -13,8 +11,10 @@ interface GameShellProps {
   characterClass?: string
   health?: number
   maxHealth?: number
+  level?: number
   onMenuClick?: () => void
   onViewAchievements?: () => void
+  onSaveGame?: () => void
 }
 
 export function GameShell({
@@ -23,8 +23,10 @@ export function GameShell({
   characterClass = "Warrior",
   health = 100,
   maxHealth = 100,
+  level = 1,
   onMenuClick,
   onViewAchievements,
+  onSaveGame,
 }: GameShellProps) {
   const [isMuted, setIsMuted] = React.useState(false)
   const [showCharacterPanel, setShowCharacterPanel] = React.useState(false)
@@ -44,12 +46,16 @@ export function GameShell({
                 size="icon"
                 onClick={onMenuClick}
                 className="md:hidden flex-shrink-0 hover:bg-[hsl(35,40%,85%)]"
+                title="Character Info"
               >
                 <Menu className="h-5 w-5" />
               </Button>
               <h1 className="font-[family-name:var(--font-heading)] text-lg md:text-xl font-bold text-[hsl(25,50%,25%)] truncate">
                 Tales of Middle-earth
               </h1>
+              <p className="text-sm text-[hsl(35,40%,40%)] truncate hidden sm:block">
+                {characterName} • Lvl {level}
+              </p>
             </div>
 
             <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
@@ -79,6 +85,16 @@ export function GameShell({
               <Button
                 variant="ghost"
                 size="icon"
+                onClick={onSaveGame}
+                title="Save Game"
+                className="hover:bg-[hsl(35,40%,85%)] hidden sm:flex"
+              >
+                <Save className="h-5 w-5 text-[hsl(35,60%,40%)]" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={onViewAchievements}
                 title="Achievements"
                 className="hover:bg-[hsl(35,40%,85%)] flex-shrink-0"
@@ -90,7 +106,8 @@ export function GameShell({
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsMuted(!isMuted)}
-                className="hover:bg-[hsl(35,40%,85%)] flex-shrink-0"
+                title="Toggle Sound"
+                className="hover:bg-[hsl(35,40%,85%)] hidden md:flex flex-shrink-0"
               >
                 {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
               </Button>
@@ -112,62 +129,40 @@ export function GameShell({
                   <p className="text-sm text-muted-foreground">{characterClass}</p>
                 </div>
 
-                <Card className="p-4 space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2">
-                        <Heart className="h-4 w-4 text-destructive" />
-                        Health
-                      </span>
-                      <span className="font-medium">
-                        {health}/{maxHealth}
-                      </span>
-                    </div>
-                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className={cn(
-                          "h-full transition-all rounded-full",
-                          healthPercentage > 50
-                            ? "bg-green-500"
-                            : healthPercentage > 25
-                              ? "bg-yellow-500"
-                              : "bg-destructive",
-                        )}
-                        style={{ width: `${healthPercentage}%` }}
-                      />
-                    </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      <Heart className="h-4 w-4 text-destructive" />
+                      Health
+                    </span>
+                    <span className="font-medium">
+                      {health}/{maxHealth}
+                    </span>
                   </div>
+                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={cn(
+                        "h-full transition-all rounded-full",
+                        healthPercentage > 50
+                          ? "bg-green-500"
+                          : healthPercentage > 25
+                            ? "bg-yellow-500"
+                            : "bg-destructive",
+                      )}
+                      style={{ width: `${healthPercentage}%` }}
+                    />
+                  </div>
+                </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2">
-                        <Swords className="h-4 w-4 text-primary" />
-                        Attack
-                      </span>
-                      <span className="font-medium">12</span>
-                    </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      <Trophy className="h-4 w-4 text-gold" />
+                      Level
+                    </span>
+                    <span className="font-medium">{level}</span>
                   </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-accent" />
-                        Defense
-                      </span>
-                      <span className="font-medium">8</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-gold" />
-                        Level
-                      </span>
-                      <span className="font-medium">1</span>
-                    </div>
-                  </div>
-                </Card>
+                </div>
 
                 <div className="space-y-2">
                   <h3 className="font-[family-name:var(--font-heading)] text-sm font-semibold">Quick Actions</h3>
@@ -181,7 +176,7 @@ export function GameShell({
                       View Achievements
                     </Button>
                     <Button variant="outline" className="w-full justify-start bg-transparent">
-                      <Shield className="h-4 w-4 mr-2" />
+                      <Menu className="h-4 w-4 mr-2" />
                       Character Stats
                     </Button>
                   </div>
@@ -192,7 +187,7 @@ export function GameShell({
         </div>
       </div>
 
-      {showAchievements && <AchievementsModal onClose={() => setShowAchievements(false)} />}
+      {showAchievements && <div>Achievements Modal Placeholder</div>}
     </>
   )
 }

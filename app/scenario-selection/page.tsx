@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, ArrowRight, Flame, Mountain, Skull, Castle, Sparkles, Clock, Wand2 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
+import { PRESET_SCENARIO_CONFIGS } from "@/lib/preset-scenarios" // Import preset configs
 
 const SCENARIOS = [
   {
@@ -100,7 +101,14 @@ export default function ScenarioSelectionPage() {
       const scenario = SCENARIOS.find((s) => s.id === selectedScenario)
 
       if (scenario) {
-        localStorage.setItem("scenario", JSON.stringify(scenario))
+        const presetConfig = PRESET_SCENARIO_CONFIGS[scenario.id]
+
+        const scenarioWithConfig = {
+          ...scenario,
+          customConfig: presetConfig,
+        }
+
+        localStorage.setItem("scenario", JSON.stringify(scenarioWithConfig))
         router.push("/game")
       }
     }
@@ -109,7 +117,7 @@ export default function ScenarioSelectionPage() {
   if (!character) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[hsl(40,30%,94%)]">
-        <div className="animate-spin w-8 h-8 border-4 border-[hsl(30,50%,50%)] border-t-transparent rounded-full" />
+        <div className="animate-spin w-8 h-8 border-4 border-[hsl(30,40%,20%)] border-t-transparent rounded-full" />
       </div>
     )
   }

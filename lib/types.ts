@@ -34,6 +34,14 @@ export type InventoryItem = {
   type: "weapon" | "armor" | "potion" | "quest" | "treasure"
   quantity: number
   value: number
+  equipped?: boolean
+  consumable?: boolean
+  stats?: Partial<CharacterStats>
+  effect?: {
+    type: "heal" | "buff" | "damage"
+    value: number
+    duration?: number // in turns
+  }
 }
 
 export type Companion = {
@@ -204,4 +212,58 @@ export type StoryEntry = {
   type: "narration" | "action" | "dice-roll"
   text: string
   timestamp: Date
+}
+
+export type GameSaveData = {
+  id: string
+  version: string // for save format compatibility
+  characterName: string
+  scenario: string
+  timestamp: Date
+  health: number
+  maxHealth: number
+  turnCount: number
+  character: Character
+  scenario: any
+  storyEntries: StoryEntry[]
+  currentXP: number
+  currentLevel: number
+  choiceCount: number
+  activeEffects: ActiveEffect[]
+}
+
+export type ActiveEffect = {
+  id: string
+  name: string
+  type: "buff" | "debuff"
+  stat?: keyof CharacterStats
+  value: number
+  remainingTurns: number
+}
+
+export type StateChanges = {
+  health?: number // Can be positive (heal) or negative (damage)
+  gold?: number // Can be positive (gain) or negative (spend)
+  xp?: number // Experience gained
+  inventory?: InventoryItem[] // Items to add
+  removeItems?: string[] // Item IDs to remove
+  companions?: Companion[] // Companions to add
+  updateCompanions?: Array<{ id: string; relationshipChange: number }> // Update existing companion relationships
+  questProgress?: {
+    objectiveCompleted?: string
+    newObjective?: string
+    questComplete?: boolean
+  }
+  effects?: ActiveEffect[] // Buffs/debuffs to apply
+}
+
+export type DiceRollData = {
+  stat: keyof CharacterStats
+  statValue: number
+  modifier: number
+  diceType: 6 | 8 | 10 | 12 | 20
+  roll: number // The actual die roll (before modifier)
+  total: number // roll + modifier
+  dc: number // Difficulty class
+  success: boolean
 }
