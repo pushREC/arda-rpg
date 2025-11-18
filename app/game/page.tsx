@@ -328,7 +328,7 @@ What will you do?`
       {
         id: "choice-1",
         text: "Take the left path through the dense undergrowth",
-        actionType: "agility",
+        actionType: "craft",
         requiresRoll: true,
         stat: "craft",
         dc: 12,
@@ -456,7 +456,8 @@ What will you do?`
 
     if (enhancedChoice?.requiresRoll && enhancedChoice.stat && enhancedChoice.dc) {
       const statValue = character?.stats?.[enhancedChoice.stat] || 10
-      const modifier = Math.floor((statValue - 10) / 2)
+      // Stat value IS the modifier (not D&D's (stat-10)/2 formula)
+      const modifier = statValue
 
       const statDisplayNames: Record<string, string> = {
         valor: "Valor",
@@ -527,7 +528,7 @@ What will you do?`
           {
             id: "wolf-3",
             text: "Climb a nearby tree",
-            actionType: "agility",
+            actionType: "craft",
             requiresRoll: true,
             stat: "craft",
             dc: 12,

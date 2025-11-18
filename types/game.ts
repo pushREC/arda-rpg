@@ -1,3 +1,9 @@
+// ⚠️ DEPRECATED: This file uses an old stat system and is NOT used in the current game.
+// The active type definitions are in /lib/types.ts with the correct 6-stat system:
+// valor, wisdom, fellowship, craft, endurance, lore
+//
+// This file is kept for reference only and should NOT be imported.
+
 export interface CharacterStats {
   health: number
   attack: number

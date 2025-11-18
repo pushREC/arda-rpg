@@ -31,7 +31,7 @@ const actionIcons = {
   combat: Swords,
   social: Users,
   investigation: Search,
-  agility: Zap,
+  craft: Zap,
   narrative: MessageCircle,
   stealth: Eye,
   survival: Mountain,
@@ -65,7 +65,8 @@ export function ChoiceButton({ choice, characterStats, onClick, index = 0, selec
 
     const statValue = characterStats[choice.stat] || 0
     const modifier = choice.modifier || 0
-    const totalModifier = Math.floor((statValue - 10) / 2) + modifier
+    // Stat value IS the modifier (not D&D's (stat-10)/2), plus any additional modifiers
+    const totalModifier = statValue + modifier
     const dc = choice.dc
 
     // Probability: Need to roll (dc - modifier) or higher on d20

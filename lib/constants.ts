@@ -12,46 +12,32 @@ export const RACE_INFO: Record<
   human: {
     name: "Human",
     description: "Versatile and adaptable, humans excel in all endeavors through sheer determination.",
-    bonuses: ["+1 to all stats", "Extra skill proficiency"],
+    bonuses: ["+2 to any one stat (your choice)", "Versatile ability"],
     imageUrl: "/placeholder.svg?height=200&width=200",
   },
   elf: {
     name: "Elf",
     description: "Ancient and wise, elves possess keen senses and natural grace.",
-    bonuses: ["+2 Dexterity", "+1 Intelligence", "Darkvision"],
+    bonuses: ["+2 Lore", "+1 Wisdom", "Keen Senses"],
     imageUrl: "/placeholder.svg?height=200&width=200",
   },
   dwarf: {
     name: "Dwarf",
     description: "Hardy and resilient, dwarves are master craftsmen with unbreakable spirits.",
-    bonuses: ["+2 Constitution", "+1 Strength", "Stone cunning"],
+    bonuses: ["+2 Endurance", "+1 Craft", "Stone-cunning"],
     imageUrl: "/placeholder.svg?height=200&width=200",
   },
   hobbit: {
     name: "Hobbit",
     description: "Small but brave, hobbits rely on luck and cleverness to overcome challenges.",
-    bonuses: ["+2 Dexterity", "+1 Charisma", "Lucky"],
+    bonuses: ["+2 Fellowship", "+1 Wisdom", "Brave"],
     imageUrl: "/placeholder.svg?height=200&width=200",
   },
 }
 
-export const BASE_STATS = {
-  strength: 10,
-  dexterity: 10,
-  constitution: 10,
-  intelligence: 10,
-  wisdom: 10,
-  charisma: 10,
-}
-
-export const STAT_NAMES: Record<keyof typeof BASE_STATS, string> = {
-  strength: "Strength",
-  dexterity: "Dexterity",
-  constitution: "Constitution",
-  intelligence: "Intelligence",
-  wisdom: "Wisdom",
-  charisma: "Charisma",
-}
+// NOTE: BASE_STATS and STAT_NAMES were removed because they used D&D 5e stats.
+// This game uses a custom 6-stat system: valor, wisdom, fellowship, craft, endurance, lore.
+// See lib/character-data.ts for the correct stat system implementation.
 
 export const SCENARIOS: Scenario[] = [
   {
@@ -132,7 +118,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: "master-persuader",
     title: "Silver Tongue",
-    description: "Succeed on 5 charisma checks",
+    description: "Succeed on 5 fellowship checks",
     unlocked: false,
     icon: "🗣️",
   },
