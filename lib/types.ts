@@ -33,6 +33,8 @@ export type Character = {
   gold: number
   inventory: InventoryItem[]
   companions: Companion[]
+  combat: CombatState
+  isDead: boolean
 }
 
 export type InventoryItem = {
@@ -57,6 +59,24 @@ export type Companion = {
   name: string
   relationship: number // -100 to 100
   description: string
+}
+
+export interface CombatState {
+  isActive: boolean
+  enemyId: string | null // e.g., "orc-warrior-123"
+  enemyName: string | null // e.g., "The Scarred Orc"
+  enemyHpCurrent: number
+  enemyHpMax: number
+  roundCount: number
+}
+
+export interface MerchantItem {
+  id: string
+  name: string
+  description: string
+  type: "weapon" | "armor" | "potion" | "utility"
+  price: number
+  rarity: "common" | "rare" | "legendary"
 }
 
 export type StoryTurn = {
@@ -197,7 +217,7 @@ export type GameState = {
   turnCount: number
 }
 
-export type ActionType = "combat" | "social" | "investigation" | "craft" | "narrative" | "stealth" | "survival"
+export type ActionType = "combat" | "social" | "investigation" | "craft" | "narrative" | "stealth" | "survival" | "trade"
 
 export type StatType = "valor" | "wisdom" | "fellowship" | "craft" | "endurance" | "lore"
 

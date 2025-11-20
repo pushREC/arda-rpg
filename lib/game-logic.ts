@@ -1,4 +1,4 @@
-import type { Character, InventoryItem, ActiveEffect, CharacterStats } from "./types"
+import type { Character, InventoryItem, ActiveEffect, CharacterStats, CombatState } from "./types"
 import {
   calculateLevel as calculateLevelFromRules,
   getXPForNextLevel as getXPFromRules,
@@ -8,6 +8,33 @@ import {
 
 const SAVE_VERSION = "1.0.0"
 const MAX_INVENTORY_SIZE = 50
+
+/**
+ * Default combat state for new characters and migration.
+ */
+export const DEFAULT_COMBAT_STATE: CombatState = {
+  isActive: false,
+  enemyId: null,
+  enemyName: null,
+  enemyHpCurrent: 0,
+  enemyHpMax: 0,
+  roundCount: 0,
+}
+
+/**
+ * Migrates old character saves to include new fields.
+ * Ensures backward compatibility with existing save files.
+ *
+ * @param char - Raw character object (potentially missing new fields)
+ * @returns Fully migrated Character object
+ */
+export function migrateCharacter(char: any): Character {
+  return {
+    ...char,
+    combat: char.combat || { ...DEFAULT_COMBAT_STATE },
+    isDead: char.isDead ?? false,
+  }
+}
 
 /**
  * @deprecated Use calculateLevel from lib/rules.ts instead
@@ -134,6 +161,11 @@ export function loadGame(saveId: string): { success: boolean; data?: any; error?
       }
     }
 
+    // Migrate character data to ensure new fields are present
+    if (save.character) {
+      save.character = migrateCharacter(save.character)
+    }
+
     return { success: true, data: save }
   } catch (error) {
     console.error("[v0] Load game error:", error)
@@ -176,7 +208,14 @@ export function loadAutoSave(): { success: boolean; data?: any } {
   try {
     const data = localStorage.getItem("autoSave")
     if (!data) return { success: false }
-    return { success: true, data: JSON.parse(data) }
+    const parsedData = JSON.parse(data)
+
+    // Migrate character data to ensure new fields are present
+    if (parsedData.character) {
+      parsedData.character = migrateCharacter(parsedData.character)
+    }
+
+    return { success: true, data: parsedData }
   } catch (error) {
     console.error("[v0] Load auto-save failed:", error)
     return { success: false }
