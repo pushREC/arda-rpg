@@ -267,3 +267,13 @@ export type DiceRollData = {
   dc: number // Difficulty class
   success: boolean
 }
+
+// ============================================================================
+// DAMAGE TIER SYSTEM (Sprint 1 - Dev A)
+// ============================================================================
+
+/**
+ * Damage tiers for the AI-driven consequence system.
+ * AI selects the tier, backend calculates the actual damage.
+ */
+export type DamageTier = "none" | "trivial" | "standard" | "dangerous" | "lethal"

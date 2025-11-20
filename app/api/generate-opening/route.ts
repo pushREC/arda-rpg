@@ -1,12 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { generateText } from "ai"
 import type { Character, Scenario, CustomScenarioConfig } from "@/lib/types"
+import { VALID_ITEM_KEYWORDS } from "@/lib/rules"
 
 export async function POST(request: NextRequest) {
   try {
     const { character, scenario, customConfig } = await request.json()
 
-    console.log("[v0] Generating opening for custom scenario")
+    console.log("[DEV B] Generating opening for custom scenario")
 
     const systemPrompt = buildGameMasterPrompt(character, scenario, customConfig)
 
@@ -49,12 +50,18 @@ Format as JSON:
       system: systemPrompt,
       prompt: userPrompt,
       temperature: 0.8,
+      // CRITICAL: Enforce JSON output
+      experimental_providerMetadata: {
+        openai: {
+          response_format: { type: "json_object" },
+        },
+      },
     })
 
     const parsed = JSON.parse(result.text)
     return NextResponse.json(parsed)
   } catch (error) {
-    console.error("[v0] Opening generation error:", error)
+    console.error("[DEV B] Opening generation error:", error)
 
     // Fallback opening
     const { scenario, customConfig } = await request.json()
@@ -94,7 +101,7 @@ Format as JSON:
 }
 
 function buildGameMasterPrompt(character: Character, scenario: Scenario, customConfig?: CustomScenarioConfig): string {
-  return `You are the Game Master for a Middle-earth text RPG.
+  return `You are the Game Master for a Middle-earth text RPG. You are a fair but firm storyteller who respects the dice and maintains game balance.
 
 CHARACTER:
 - Name: ${character.name}
@@ -133,13 +140,34 @@ Apply these adjustments gradually over the next 3-5 turns.
     : ""
 }
 
-IMPORTANT RULES:
+CRITICAL RULES FOR RESPONSES:
+
+1. ACTION TYPES (MANDATORY ENUM):
+   You MUST use ONLY these actionType values:
+   - "combat" | "social" | "investigation" | "craft" | "narrative" | "stealth" | "survival"
+
+2. ITEM GENERATION (MANDATORY KEYWORDS):
+   If you generate starting items, they MUST contain one of these keywords:
+   ${VALID_ITEM_KEYWORDS.slice(0, 30).join(", ")}, ...
+
+   Examples:
+   ✅ GOOD: "Ancient Elven Sword", "Healing Potion", "Rusty Key"
+   ❌ BAD: "Glimmering Shard", "Mysterious Object"
+
+3. DIFFICULTY CLASSES:
+   - Easy: 8-10
+   - Medium: 12-14
+   - Hard: 15-18
+
+4. CHOICE BALANCE:
+   Generate 3-4 choices that vary in actionType and match the character's high stats.
+
+5. JSON FORMATTING:
+   Respond ONLY with valid JSON. Do not include markdown code blocks or explanatory text.
+
 - Respect the custom directives above at all times
-- Generate choices that match the character's abilities and the scenario's tone
-- Set appropriate DCs: Easy 8-10, Medium 12-14, Hard 15-18
-- Balance choice types: combat, social, investigation, craft, stealth, survival
 - Make the ${customConfig?.tones.join(" and ") || "epic"} tone evident in your writing
-- Keep narratives concise but evocative (2-4 paragraphs)
+- Keep narratives concise but evocative (3-4 paragraphs)
 - Always provide meaningful choices that matter`
 }
 

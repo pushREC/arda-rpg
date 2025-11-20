@@ -612,12 +612,140 @@ Your backend is complete when:
 
 ---
 
+---
+
+## 🔄 SPRINT 2 UPDATES - API ENFORCEMENT & AI GUARDRAILS
+
+**Last Updated:** January 2025 (Sprint 2 - Dev B)
+**Status:** Production Implementation Complete
+
+### New Features Implemented
+
+#### 1. JSON Schema Enforcement
+
+All API endpoints now use:
+```typescript
+experimental_providerMetadata: {
+  openai: {
+    response_format: { type: "json_object" }
+  }
+}
+```
+
+This forces the AI to return **ONLY** valid JSON, preventing hallucinations and malformed responses.
+
+#### 2. Damage Tier System
+
+The API no longer allows the AI to specify raw damage values. Instead:
+
+**New Type (added to `lib/types.ts`):**
+```typescript
+export type DamageTier = "none" | "trivial" | "standard" | "dangerous" | "lethal"
+```
+
+**Tier Definitions (from `lib/rules.ts`):**
+- `none`: 0 HP (success, safe choice)
+- `trivial`: 1-3 HP (minor scrape)
+- `standard`: 4-8 HP (moderate injury)
+- `dangerous`: 9-15 HP (serious wound)
+- `lethal`: 16-25 HP (life-threatening)
+
+**Updated Response Contract:**
+```typescript
+{
+  "narrative": string,
+  "choices": EnhancedChoice[],
+  "consequenceTier": "none|trivial|standard|dangerous|lethal", // NEW FIELD
+  "stateChanges": {
+    // health is now calculated server-side based on consequenceTier
+    "gold": number,
+    "xp": number,
+    // ... rest unchanged
+  }
+}
+```
+
+**Middleware Logic:**
+The backend calculates damage from the tier:
+```typescript
+if (aiResponse.consequenceTier && aiResponse.consequenceTier !== "none") {
+  const tier = aiResponse.consequenceTier as DamageTier;
+  calculatedHealth = -calculateDamage(tier, true);
+}
+```
+
+#### 3. Item Keyword Enforcement
+
+The system prompt now includes all valid item keywords from `lib/rules.ts`:
+
+```
+VALID_ITEM_KEYWORDS = [
+  "sword", "bow", "dagger", "axe", "shield", "armor", "potion",
+  "scroll", "book", "map", "rope", "gem", "gold", "key",
+  // ... 100+ keywords total
+]
+```
+
+Generated items MUST contain at least one keyword to render icons correctly.
+
+#### 4. Pacing Engine (Turn 20 Wall)
+
+The API tracks turn count and dynamically injects pacing instructions:
+
+- **Turn 0-4:** ACT 1 (Introduction) - World-building, low-risk encounters
+- **Turn 5-15:** ACT 2 (Rising Action) - Increased difficulty, central conflict
+- **Turn 16-19:** ACT 3 (Climax) - Final confrontation setup
+- **Turn 20+:** CONCLUSION MANDATORY - AI MUST force Victory or Defeat
+
+At Turn 20+, the AI is instructed to set `questComplete: true` in stateChanges.
+
+#### 5. State Change Sanitization
+
+The backend now sanitizes all state changes via `lib/rules.ts`:
+
+```typescript
+export function sanitizeStateChanges(stateChanges: any): any {
+  // Clamp health: -25 to +30
+  // Clamp XP: max 100 (unless questComplete: true)
+  // Clamp gold: max -50 loss per turn
+}
+```
+
+This prevents the AI from breaking game balance with extreme values.
+
+### New Files Created
+
+- **lib/rules.ts** - Game rules engine (damage tiers, XP table, sanitization)
+- **docs/api/AI_PROMPT_GUIDE.md** - Comprehensive AI prompt documentation
+
+### Updated Files
+
+- **app/api/process-turn/route.ts** - Middleware logic, pacing engine, JSON enforcement
+- **app/api/generate-opening/route.ts** - Item keyword enforcement, JSON enforcement
+- **lib/types.ts** - Added `DamageTier` type
+
+### Breaking Changes
+
+⚠️ **IMPORTANT:** The `process-turn` response now includes `consequenceTier` instead of direct health values in some cases. Frontend should use the `stateChanges.health` field, which is calculated server-side.
+
+### Testing Notes
+
+To test the new system:
+1. Start a game and play through 5 turns - verify ACT 1 pacing
+2. Continue to Turn 15 - verify ACT 2 increased difficulty
+3. Reach Turn 20 - verify AI forces conclusion
+4. Check that generated items have valid keywords (inspect inventory icons)
+5. Verify damage values are within tier ranges (check console logs for "[DEV B]" messages)
+
+---
+
 ## 📞 Questions & References
 
 ### Documentation
 
 - **PRD.md** - Product requirements, tech stack decisions, MVP scope
 - **BACKEND_HANDOFF.md** (this file) - API contracts and implementation guide
+- **docs/api/AI_PROMPT_GUIDE.md** - AI prompt engineering guide (NEW - Sprint 2)
 - **ZUSTAND_TO_CONTEXT_MIGRATION.md** - Post-MVP state management refactor (optional)
 
 ### Code References
