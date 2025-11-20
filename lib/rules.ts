@@ -434,6 +434,42 @@ export function calculateGoldReward(tier: GoldTier): number {
 }
 
 // ============================================================================
+// TRADE ECONOMY - Merchant Pricing Rules
+// ============================================================================
+
+/**
+ * Trading configuration for merchant interactions.
+ *
+ * - BUY_MULTIPLIER: How much the player pays relative to base value
+ * - SELL_MULTIPLIER: How much the player gets when selling items
+ * - PRICE_VARIANCE: Random price fluctuation (+/- percentage)
+ */
+export const TRADE_CONFIG = {
+  BUY_MULTIPLIER: 1.0, // Player buys at full value
+  SELL_MULTIPLIER: 0.5, // Player sells at 50% value
+  PRICE_VARIANCE: 0.2, // Prices fluctuate +/- 20%
+} as const
+
+// ============================================================================
+// COMPANION BONUSES - Fellowship Stat Modifiers
+// ============================================================================
+
+/**
+ * Stat bonuses granted by companions based on their type.
+ *
+ * These bonuses are applied when a companion joins the party.
+ * The keyword is matched against the companion's name or description.
+ */
+export const COMPANION_BONUSES = {
+  ranger: { stat: "valor", bonus: 2 },
+  warrior: { stat: "valor", bonus: 2 },
+  scholar: { stat: "lore", bonus: 2 },
+  rogue: { stat: "craft", bonus: 2 },
+  guide: { stat: "wisdom", bonus: 2 },
+  merchant: { stat: "fellowship", bonus: 2 },
+} as const
+
+// ============================================================================
 // STAT CONSTRAINTS & VALIDATION
 // ============================================================================
 
