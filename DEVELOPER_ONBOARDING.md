@@ -198,6 +198,43 @@ open lib/types.ts
 pnpm dev
 ```
 
+### ⚠️ Critical: State Management Guidelines
+
+**IMPORTANT:** This project uses Zustand for state management, but the main game page currently uses local React state.
+
+**Current Architecture (as of Sprint 3):**
+- `lib/game-state.ts` - Zustand store with persist middleware
+- `app/game/page.tsx` - **Uses local `useState` instead of Zustand**
+- All character/inventory updates bypass the global store
+
+**Best Practices:**
+1. **DO NOT use local state for Character data** - Always use `useGameStore` actions
+2. **Persist immediately** - Call store actions that trigger `lastSaved: Date.now()`
+3. **Avoid manual localStorage calls** - Let Zustand persist middleware handle it
+4. **Test persistence** - Refresh the page after state changes to verify sync
+
+**When refactoring to proper Zustand usage:**
+```typescript
+// ❌ WRONG (current implementation in game/page.tsx)
+const [character, setCharacter] = useState(null)
+setCharacter({ ...character, gold: newGold })
+localStorage.setItem("character", JSON.stringify(character))
+
+// ✅ CORRECT (use Zustand actions)
+import { useGameStore } from "@/lib/game-state"
+const addGold = useGameStore((state) => state.addGold)
+addGold(50) // Automatically persists
+```
+
+**Available Zustand Actions:**
+- `addInventoryItem(item)` - Add item to inventory
+- `removeInventoryItem(itemId)` - Remove item from inventory
+- `addGold(amount)` - Add/subtract gold
+- `adjustHealth(amount)` - Modify health (auto-clamps)
+- `addXP(xp)` - Grant experience points
+
+See `lib/game-state.ts` for the complete action list.
+
 ### Day 2-3: Implement Endpoints
 
 **Recommended Order:**

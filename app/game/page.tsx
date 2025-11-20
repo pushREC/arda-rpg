@@ -16,7 +16,7 @@ import { ItemDetailModal } from "@/components/item-detail-modal"
 import { SaveLoadModal } from "@/components/save-load-modal"
 import { QuestTracker } from "@/components/quest-tracker"
 import { LevelUpModal } from "@/components/level-up-modal"
-import type { StoryEntry, EnhancedChoice, StatType, CustomScenarioConfig } from "@/lib/types"
+import type { StoryEntry, EnhancedChoice, StatType, CustomScenarioConfig, InventoryItem } from "@/lib/types"
 import { toast } from "sonner"
 import { unlockAchievement, getAchievementById } from "@/lib/achievements"
 import {
@@ -33,8 +33,10 @@ import {
   validateAIResponse,
   validateGameData,
 } from "@/lib/game-logic"
+import { getStatModifier } from "@/lib/rules"
 import { modalQueue } from "@/lib/modal-queue"
 import { NotificationManager, useNotifications } from "@/components/notification-manager"
+import { useGameStore } from "@/lib/game-state"
 
 function GamePageContent() {
   const router = useRouter()
@@ -74,7 +76,7 @@ function GamePageContent() {
   const [activeEffects, setActiveEffects] = React.useState<any[]>([])
   const [currentQueuedModal, setCurrentQueuedModal] = React.useState<any>(null)
   const [retryCount, setRetryCount] = React.useState(0)
-  const [selectedItem, setSelectedItem] = React.useState<any>(null)
+  const [selectedItem, setSelectedItem] = React.useState<InventoryItem | null>(null)
   const [showItemDetail, setShowItemDetail] = React.useState(false)
   const MAX_RETRIES = 3
   const loadingTimeoutRef = React.useRef<NodeJS.Timeout>()
@@ -84,7 +86,7 @@ function GamePageContent() {
     storyEntries.length > 0 && storyEntries[storyEntries.length - 1]?.text?.toLowerCase().includes("combat")
 
   const handleUseItem = React.useCallback(
-    (item: any) => {
+    (item: InventoryItem) => {
       const result = applyItem(item, character, currentHealth)
 
       if (result.success) {
@@ -111,7 +113,7 @@ function GamePageContent() {
   )
 
   const handleEquipItem = React.useCallback(
-    (item: any) => {
+    (item: InventoryItem) => {
       const updatedCharacter = equipItem(item, character)
       setCharacter(updatedCharacter)
       localStorage.setItem("character", JSON.stringify(updatedCharacter))
@@ -124,7 +126,7 @@ function GamePageContent() {
   )
 
   const handleDropItem = React.useCallback(
-    (item: any) => {
+    (item: InventoryItem) => {
       const updatedInventory = character.inventory.filter((i: any) => i.id !== item.id)
       const updatedCharacter = { ...character, inventory: updatedInventory }
       setCharacter(updatedCharacter)
@@ -135,6 +137,28 @@ function GamePageContent() {
       })
     },
     [character],
+  )
+
+  const handleSellItem = React.useCallback(
+    (item: InventoryItem, sellValue: number) => {
+      // CRITICAL: Update Zustand store first (persistent source of truth)
+      const store = useGameStore.getState()
+      store.removeInventoryItem(item.id)
+      store.addGold(sellValue)
+
+      // Then sync local state from Zustand to ensure consistency
+      const updatedCharacter = useGameStore.getState().character
+      if (updatedCharacter) {
+        setCharacter(updatedCharacter)
+        // Zustand persist middleware handles localStorage automatically
+      }
+
+      addNotification("gold", sellValue)
+      toast.success(`Sold ${item.name}`, {
+        description: `+${sellValue} gold`,
+      })
+    },
+    [addNotification],
   )
 
   React.useEffect(() => {
@@ -456,8 +480,7 @@ What will you do?`
 
     if (enhancedChoice?.requiresRoll && enhancedChoice.stat && enhancedChoice.dc) {
       const statValue = character?.stats?.[enhancedChoice.stat] || 10
-      // Stat value IS the modifier (not D&D's (stat-10)/2 formula)
-      const modifier = statValue
+      const modifier = getStatModifier(statValue)
 
       const statDisplayNames: Record<string, string> = {
         valor: "Valor",
@@ -470,13 +493,21 @@ What will you do?`
 
       setTimeout(() => {
         triggerDiceRoll(
-          (result) => {
-            const success = result >= enhancedChoice.dc!
+          (total) => {
+            const roll = total - modifier // Extract base roll
+            const success = total >= enhancedChoice.dc!
 
+            // Immediate feedback toast BEFORE narrative
             if (success) {
+              toast.success(`Roll ${roll} + ${modifier} = ${total} (DC ${enhancedChoice.dc})`, {
+                description: "Success!",
+              })
               addStoryEntry("narration", "Success! Your skill sees you through.")
               continueStoryAfterChoice(choiceText, true)
             } else {
+              toast.error(`Roll ${roll} + ${modifier} = ${total} (DC ${enhancedChoice.dc})`, {
+                description: "Failed!",
+              })
               addStoryEntry("narration", "The attempt fails. Things take a turn for the worse...")
               continueStoryAfterChoice(choiceText, false)
             }
@@ -732,19 +763,29 @@ What will you do?`
       }
 
       const turnCount = storyEntries.filter((e) => e.type === "action").length + 1
-      if (combinedChanges.questComplete || detectQuestCompletion(narrative, turnCount, scenario)) {
-        modalQueue.enqueue(
-          "victory",
-          {
-            questName: scenario.title,
-            finalStats: {
-              turns: turnCount,
-              gold: character.gold || 0,
-              experience: currentXP,
+
+      // Check for the "Quest Complete" flag from Sprint 2 (Dev B)
+      // Priority: API nested structure > top-level fallback > narrative detection
+      const questCompleteFromAPI = data.stateChanges?.questProgress?.questComplete
+      const questCompleteTopLevel = combinedChanges.questComplete  // Legacy fallback
+      const questCompleteDetected = detectQuestCompletion(narrative, turnCount, scenario)
+
+      if (questCompleteFromAPI || questCompleteTopLevel || questCompleteDetected) {
+        // Allow a small delay for the narrative to read, then show Victory
+        setTimeout(() => {
+          modalQueue.enqueue(
+            "victory",
+            {
+              questName: scenario.title,
+              finalStats: {
+                turns: turnCount,
+                gold: character.gold || 0,
+                experience: currentXP,
+              },
             },
-          },
-          100,
-        )
+            100,
+          )
+        }, 2000)
       }
 
       addStoryEntry("narration", narrative)
@@ -1042,6 +1083,11 @@ What will you do?`
                 }
               : undefined
           }
+          onSell={(sellValue) => {
+            handleSellItem(selectedItem, sellValue)
+            setShowItemDetail(false)
+            setSelectedItem(null)
+          }}
           onDrop={() => {
             handleDropItem(selectedItem)
             setShowItemDetail(false)

@@ -4,6 +4,7 @@ import * as React from "react"
 import { X } from "lucide-react"
 import { CharacterPanel } from "@/components/character-panel"
 import { Button } from "@/components/ui/button"
+import { modalQueue } from "@/lib/modal-queue"
 
 interface CharacterDrawerProps {
   character: any
@@ -28,6 +29,16 @@ export function CharacterDrawer({
     }
     window.addEventListener("keydown", handleEscape)
     return () => window.removeEventListener("keydown", handleEscape)
+  }, [isOpen, onClose])
+
+  // Auto-close drawer when global modals (LevelUp, Victory, GameOver) are triggered
+  React.useEffect(() => {
+    const unsubscribe = modalQueue.subscribe((modal) => {
+      if (modal && isOpen) {
+        onClose()
+      }
+    })
+    return unsubscribe
   }, [isOpen, onClose])
 
   if (!isOpen) return null
