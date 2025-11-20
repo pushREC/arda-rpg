@@ -276,11 +276,13 @@ export type DiceRollData = {
   success: boolean
 }
 
+
 /**
  * Damage tiers for combat and hazards.
  * See lib/rules.ts for actual damage ranges.
+ * Note: "NONE" is used by the API middleware to indicate zero damage.
  */
-export type DamageTier = "TRIVIAL" | "STANDARD" | "DANGEROUS" | "LETHAL"
+export type DamageTier = "NONE" | "TRIVIAL" | "STANDARD" | "DANGEROUS" | "LETHAL"
 
 /**
  * Difficulty levels for skill checks.
@@ -293,3 +295,4 @@ export type DifficultyLevel = "easy" | "medium" | "hard"
  * See lib/rules.ts for actual gold ranges.
  */
 export type GoldTier = "TRIVIAL" | "COMMON" | "UNCOMMON" | "RARE" | "LEGENDARY"
+main

@@ -1,12 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { generateText } from "ai"
 import type { Character, Scenario, CustomScenarioConfig } from "@/lib/types"
+import { PROMPT_ITEM_KEYWORDS } from "@/lib/rules"
 
 export async function POST(request: NextRequest) {
   try {
     const { character, scenario, customConfig } = await request.json()
 
-    console.log("[v0] Generating opening for custom scenario")
+    console.log("[DEV B] Generating opening for custom scenario")
 
     const systemPrompt = buildGameMasterPrompt(character, scenario, customConfig)
 
@@ -49,52 +50,75 @@ Format as JSON:
       system: systemPrompt,
       prompt: userPrompt,
       temperature: 0.8,
+      // CRITICAL: Enforce JSON output
+      experimental_providerMetadata: {
+        openai: {
+          response_format: { type: "json_object" },
+        },
+      },
     })
 
     const parsed = JSON.parse(result.text)
     return NextResponse.json(parsed)
   } catch (error) {
-    console.error("[v0] Opening generation error:", error)
+    console.error("[DEV B] Opening generation error:", error)
 
-    // Fallback opening
-    const { scenario, customConfig } = await request.json()
+    // Fallback opening - CRITICAL: Must handle request parsing failure
+    try {
+      const { scenario, customConfig } = await request.json()
 
-    return NextResponse.json({
-      narrative: `You find yourself in ${customConfig.location}, ${customConfig.region}. ${customConfig.questHook || "An adventure awaits you."}`,
-      choices: [
-        {
-          id: "choice-1",
-          text: "Investigate the area carefully",
-          actionType: "investigation",
-          requiresRoll: true,
-          stat: "wisdom",
-          dc: 12,
-          riskLevel: "safe",
-        },
-        {
-          id: "choice-2",
-          text: "Approach directly and announce your presence",
-          actionType: "social",
-          requiresRoll: true,
-          stat: "fellowship",
-          dc: 12,
-          riskLevel: "moderate",
-        },
-        {
-          id: "choice-3",
-          text: "Prepare for potential danger",
-          actionType: "combat",
-          requiresRoll: false,
-          stat: "valor",
-          riskLevel: "moderate",
-        },
-      ],
-    })
+      return NextResponse.json({
+        narrative: `You find yourself in ${customConfig?.location || "a mysterious land"}, ${customConfig?.region || "Middle-earth"}. ${customConfig?.questHook || "An adventure awaits you."}`,
+        choices: [
+          {
+            id: "choice-1",
+            text: "Investigate the area carefully",
+            actionType: "investigation" as const,
+            requiresRoll: true,
+            stat: "wisdom" as const,
+            dc: 12,
+            riskLevel: "safe" as const,
+          },
+          {
+            id: "choice-2",
+            text: "Approach directly and announce your presence",
+            actionType: "social" as const,
+            requiresRoll: true,
+            stat: "fellowship" as const,
+            dc: 12,
+            riskLevel: "moderate" as const,
+          },
+          {
+            id: "choice-3",
+            text: "Prepare for potential danger",
+            actionType: "combat" as const,
+            requiresRoll: false,
+            stat: "valor" as const,
+            riskLevel: "moderate" as const,
+          },
+        ],
+      })
+    } catch (parseError) {
+      // Double-fallback if request.json() also fails
+      console.error("[DEV B] Critical: Request parsing also failed:", parseError)
+      return NextResponse.json({
+        narrative: "You find yourself at the beginning of an unexpected journey. The path ahead is shrouded in mystery, but your courage will light the way.",
+        choices: [
+          {
+            id: "fallback-1",
+            text: "Begin your adventure",
+            actionType: "narrative" as const,
+            requiresRoll: false,
+            riskLevel: "safe" as const,
+          },
+        ],
+      })
+    }
   }
 }
 
 function buildGameMasterPrompt(character: Character, scenario: Scenario, customConfig?: CustomScenarioConfig): string {
-  return `You are the Game Master for a Middle-earth text RPG.
+  return `You are the Game Master for a Middle-earth text RPG. You are a fair but firm storyteller who respects the dice and maintains game balance.
 
 CHARACTER:
 - Name: ${character.name}
@@ -133,13 +157,34 @@ Apply these adjustments gradually over the next 3-5 turns.
     : ""
 }
 
-IMPORTANT RULES:
+CRITICAL RULES FOR RESPONSES:
+
+1. ACTION TYPES (MANDATORY ENUM):
+   You MUST use ONLY these actionType values:
+   - "combat" | "social" | "investigation" | "craft" | "narrative" | "stealth" | "survival"
+
+2. ITEM GENERATION (MANDATORY KEYWORDS):
+   If you generate starting items, they MUST contain one of these keywords:
+   ${PROMPT_ITEM_KEYWORDS.join(", ")}
+
+   Examples:
+   ✅ GOOD: "Ancient Elven Sword", "Healing Potion", "Rusty Key"
+   ❌ BAD: "Glimmering Shard", "Mysterious Object"
+
+3. DIFFICULTY CLASSES:
+   - Easy: 8-10
+   - Medium: 12-14
+   - Hard: 15-18
+
+4. CHOICE BALANCE:
+   Generate 3-4 choices that vary in actionType and match the character's high stats.
+
+5. JSON FORMATTING:
+   Respond ONLY with valid JSON. Do not include markdown code blocks or explanatory text.
+
 - Respect the custom directives above at all times
-- Generate choices that match the character's abilities and the scenario's tone
-- Set appropriate DCs: Easy 8-10, Medium 12-14, Hard 15-18
-- Balance choice types: combat, social, investigation, craft, stealth, survival
 - Make the ${customConfig?.tones.join(" and ") || "epic"} tone evident in your writing
-- Keep narratives concise but evocative (2-4 paragraphs)
+- Keep narratives concise but evocative (3-4 paragraphs)
 - Always provide meaningful choices that matter`
 }
 
