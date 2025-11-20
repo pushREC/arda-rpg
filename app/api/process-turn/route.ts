@@ -5,7 +5,6 @@ import {
   PROMPT_ITEM_KEYWORDS,
   DAMAGE_TIERS,
   calculateDamage,
-  XP_REWARDS,
   sanitizeStateChanges,
 } from "@/lib/rules"
 
@@ -135,9 +134,16 @@ Format as JSON:
 
     // AI specifies SEVERITY, we calculate DAMAGE
     if (aiResponse.consequenceTier && aiResponse.consequenceTier !== "none") {
-      const tier = aiResponse.consequenceTier as DamageTier
-      calculatedHealth = -calculateDamage(tier, true) // Negative for damage
-      console.log(`[DEV B] AI requested "${tier}" damage → ${calculatedHealth} HP`)
+      // ✅ TICKET D.1: Casing Hotfix - Normalize AI response to uppercase
+      const rawTier = aiResponse.consequenceTier || "NONE"
+      const tier = rawTier.toUpperCase() as DamageTier
+      console.log(`[DEV D] Processing Tier: ${rawTier} -> ${tier}`)
+
+      // Only calculate damage for non-NONE tiers
+      if (tier !== "NONE") {
+        calculatedHealth = -calculateDamage(tier, true) // Negative for damage
+        console.log(`[DEV B] AI requested "${tier}" damage → ${calculatedHealth} HP`)
+      }
     }
 
     // Override AI's raw state changes with calculated values
@@ -145,6 +151,18 @@ Format as JSON:
       ...aiResponse.stateChanges,
       health: calculatedHealth !== 0 ? calculatedHealth : aiResponse.stateChanges?.health,
     })
+
+    // ========================================================================
+    // TICKET D.3: VICTORY CONDITION - Ensure questComplete is set at Turn 20+
+    // ========================================================================
+    if (turnCount >= 20) {
+      // Safety: Ensure questProgress is initialized before assignment
+      finalStateChanges.questProgress = {
+        ...finalStateChanges.questProgress,
+        questComplete: true,
+      }
+      console.log(`[DEV D] Turn ${turnCount}: Auto-setting questComplete = true`)
+    }
 
     const finalResponse = {
       narrative: aiResponse.narrative,
