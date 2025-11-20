@@ -22,6 +22,8 @@ import {
   MAX_STAT_VALUE,
   validateStats,
   clampStat,
+  PROMPT_ITEM_KEYWORDS,
+  sanitizeStateChanges,
 } from "./rules"
 
 console.log("🧪 Running ARDA RPG Rules Engine Verification Tests...\n")
@@ -219,6 +221,75 @@ test("validateStats(invalidStats) === false", validateStats(invalidStats) === fa
 test("clampStat(2) === 3", clampStat(2) === 3)
 test("clampStat(5) === 5", clampStat(5) === 5)
 test("clampStat(10) === 8", clampStat(10) === 8)
+
+// ============================================================================
+// AI PROMPT OPTIMIZATION TESTS
+// ============================================================================
+
+console.log("\n🤖 Testing AI Prompt Keywords:")
+test("PROMPT_ITEM_KEYWORDS length === 20", PROMPT_ITEM_KEYWORDS.length === 20)
+test("PROMPT_ITEM_KEYWORDS includes 'sword'", PROMPT_ITEM_KEYWORDS.includes("sword"))
+test("PROMPT_ITEM_KEYWORDS includes 'potion'", PROMPT_ITEM_KEYWORDS.includes("potion"))
+test("PROMPT_ITEM_KEYWORDS includes 'shield'", PROMPT_ITEM_KEYWORDS.includes("shield"))
+test(
+  "PROMPT_ITEM_KEYWORDS is subset of VALID_ITEM_KEYWORDS",
+  PROMPT_ITEM_KEYWORDS.every((kw) => VALID_ITEM_KEYWORDS.includes(kw))
+)
+
+// ============================================================================
+// STATE SANITIZATION TESTS
+// ============================================================================
+
+console.log("\n🔒 Testing State Change Sanitization:")
+
+// Test health clamping
+const excessiveDamage = sanitizeStateChanges({ health: -999 })
+test("Excessive damage clamped to -25 (LETHAL max)", excessiveDamage.health === -25)
+
+const excessiveHealing = sanitizeStateChanges({ health: 999 })
+test("Excessive healing clamped to +30", excessiveHealing.health === 30)
+
+const normalDamage = sanitizeStateChanges({ health: -10 })
+test("Normal damage (-10) not modified", normalDamage.health === -10)
+
+// Test XP clamping
+const excessiveXP = sanitizeStateChanges({ xp: 500 })
+test("Excessive XP clamped to 100 (without quest complete)", excessiveXP.xp === 100)
+
+const negativeXP = sanitizeStateChanges({ xp: -50 })
+test("Negative XP clamped to 0", negativeXP.xp === 0)
+
+const questCompleteXP = sanitizeStateChanges({ xp: 500, questProgress: { questComplete: true } })
+test("Quest completion allows XP > 100", questCompleteXP.xp === 500)
+
+// Test gold clamping
+const excessiveGold = sanitizeStateChanges({ gold: 999 })
+test("Excessive gold clamped to 250 (LEGENDARY max)", excessiveGold.gold === 250)
+
+const negativeGold = sanitizeStateChanges({ gold: -999 })
+test("Excessive negative gold clamped to -100", negativeGold.gold === -100)
+
+const normalGold = sanitizeStateChanges({ gold: 50 })
+test("Normal gold (50) not modified", normalGold.gold === 50)
+
+// Test combined sanitization
+const combined = sanitizeStateChanges({
+  health: -100,
+  xp: 200,
+  gold: 500,
+})
+test("Combined sanitization works", combined.health === -25 && combined.xp === 100 && combined.gold === 250)
+
+// Test passthrough for valid values
+const valid = sanitizeStateChanges({
+  health: -8,
+  xp: 50,
+  gold: 25,
+})
+test(
+  "Valid values pass through unchanged",
+  valid.health === -8 && valid.xp === 50 && valid.gold === 25
+)
 
 // ============================================================================
 // SUMMARY
