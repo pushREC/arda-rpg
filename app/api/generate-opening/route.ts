@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { generateText } from "ai"
 import type { Character, Scenario, CustomScenarioConfig } from "@/lib/types"
-import { VALID_ITEM_KEYWORDS } from "@/lib/rules"
+import { PROMPT_ITEM_KEYWORDS } from "@/lib/rules"
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,40 +63,57 @@ Format as JSON:
   } catch (error) {
     console.error("[DEV B] Opening generation error:", error)
 
-    // Fallback opening
-    const { scenario, customConfig } = await request.json()
+    // Fallback opening - CRITICAL: Must handle request parsing failure
+    try {
+      const { scenario, customConfig } = await request.json()
 
-    return NextResponse.json({
-      narrative: `You find yourself in ${customConfig.location}, ${customConfig.region}. ${customConfig.questHook || "An adventure awaits you."}`,
-      choices: [
-        {
-          id: "choice-1",
-          text: "Investigate the area carefully",
-          actionType: "investigation",
-          requiresRoll: true,
-          stat: "wisdom",
-          dc: 12,
-          riskLevel: "safe",
-        },
-        {
-          id: "choice-2",
-          text: "Approach directly and announce your presence",
-          actionType: "social",
-          requiresRoll: true,
-          stat: "fellowship",
-          dc: 12,
-          riskLevel: "moderate",
-        },
-        {
-          id: "choice-3",
-          text: "Prepare for potential danger",
-          actionType: "combat",
-          requiresRoll: false,
-          stat: "valor",
-          riskLevel: "moderate",
-        },
-      ],
-    })
+      return NextResponse.json({
+        narrative: `You find yourself in ${customConfig?.location || "a mysterious land"}, ${customConfig?.region || "Middle-earth"}. ${customConfig?.questHook || "An adventure awaits you."}`,
+        choices: [
+          {
+            id: "choice-1",
+            text: "Investigate the area carefully",
+            actionType: "investigation" as const,
+            requiresRoll: true,
+            stat: "wisdom" as const,
+            dc: 12,
+            riskLevel: "safe" as const,
+          },
+          {
+            id: "choice-2",
+            text: "Approach directly and announce your presence",
+            actionType: "social" as const,
+            requiresRoll: true,
+            stat: "fellowship" as const,
+            dc: 12,
+            riskLevel: "moderate" as const,
+          },
+          {
+            id: "choice-3",
+            text: "Prepare for potential danger",
+            actionType: "combat" as const,
+            requiresRoll: false,
+            stat: "valor" as const,
+            riskLevel: "moderate" as const,
+          },
+        ],
+      })
+    } catch (parseError) {
+      // Double-fallback if request.json() also fails
+      console.error("[DEV B] Critical: Request parsing also failed:", parseError)
+      return NextResponse.json({
+        narrative: "You find yourself at the beginning of an unexpected journey. The path ahead is shrouded in mystery, but your courage will light the way.",
+        choices: [
+          {
+            id: "fallback-1",
+            text: "Begin your adventure",
+            actionType: "narrative" as const,
+            requiresRoll: false,
+            riskLevel: "safe" as const,
+          },
+        ],
+      })
+    }
   }
 }
 
@@ -148,7 +165,7 @@ CRITICAL RULES FOR RESPONSES:
 
 2. ITEM GENERATION (MANDATORY KEYWORDS):
    If you generate starting items, they MUST contain one of these keywords:
-   ${VALID_ITEM_KEYWORDS.slice(0, 30).join(", ")}, ...
+   ${PROMPT_ITEM_KEYWORDS.join(", ")}
 
    Examples:
    ✅ GOOD: "Ancient Elven Sword", "Healing Potion", "Rusty Key"

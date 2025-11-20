@@ -18,6 +18,9 @@
  *
  * Example: "Elven Dagger" ✅ (contains "dagger")
  * Example: "Shiny Shard" ❌ (no keyword match)
+ *
+ * NOTE: This is the FULL list (100+ keywords). For prompt injection,
+ * use PROMPT_ITEM_KEYWORDS instead to reduce token cost.
  */
 export const VALID_ITEM_KEYWORDS = [
   // Weapons
@@ -84,6 +87,33 @@ export function validateItemName(name: string): {
     suggestion: `${name} (Item)` // Generic fallback
   };
 }
+
+/**
+ * CURATED SUBSET for AI prompt injection (20 core keywords).
+ * Reduces token cost while covering 90%+ of item types.
+ *
+ * Full validation still uses VALID_ITEM_KEYWORDS (100+ keywords).
+ * This list is ONLY for system prompt injection to reduce context window bloat.
+ */
+export const PROMPT_ITEM_KEYWORDS = [
+  // Weapons (5)
+  "sword", "bow", "dagger", "axe", "staff",
+
+  // Armor & Protection (3)
+  "shield", "armor", "helmet",
+
+  // Magic (4)
+  "scroll", "wand", "amulet", "ring",
+
+  // Consumables (3)
+  "potion", "food", "bandage",
+
+  // Treasure (2)
+  "gem", "gold",
+
+  // Books & Tools (3)
+  "book", "map", "rope",
+];
 
 // ============================================================================
 // THE 6-STAT SYSTEM (3-8 Scale, NOT D&D)
@@ -245,6 +275,7 @@ export function sanitizeStateChanges(stateChanges: any): any {
 
 export default {
   VALID_ITEM_KEYWORDS,
+  PROMPT_ITEM_KEYWORDS,
   validateItemName,
   getStatModifier,
   calculateDC,

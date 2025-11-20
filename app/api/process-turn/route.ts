@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { generateText } from "ai"
 import type { Character, Scenario, CustomScenarioConfig, StoryEntry, DamageTier } from "@/lib/types"
 import {
-  VALID_ITEM_KEYWORDS,
+  PROMPT_ITEM_KEYWORDS,
   DAMAGE_TIERS,
   calculateDamage,
   XP_REWARDS,
@@ -159,6 +159,7 @@ Format as JSON:
     console.error("[DEV B] Turn processing error:", error)
 
     // Fallback narrative to prevent 500 errors
+    // CRITICAL: Must match new schema with consequenceTier
     return NextResponse.json({
       narrative:
         "The chaos of battle obscures the outcome... The path ahead remains uncertain, but you must press on.",
@@ -166,12 +167,22 @@ Format as JSON:
         {
           id: "fallback-1",
           text: "Continue onward",
-          actionType: "narrative",
+          actionType: "narrative" as const,
           requiresRoll: false,
-          riskLevel: "safe",
+          riskLevel: "safe" as const,
+        },
+        {
+          id: "fallback-2",
+          text: "Take a moment to assess the situation",
+          actionType: "investigation" as const,
+          requiresRoll: false,
+          riskLevel: "safe" as const,
         },
       ],
-      stateChanges: {},
+      consequenceTier: "none" as const, // NEW: Match Sprint 2 schema
+      stateChanges: {
+        health: 0, // Explicit zero (no change)
+      },
     })
   }
 }
@@ -246,7 +257,7 @@ CRITICAL RULES FOR RESPONSES:
 
 2. ITEM GENERATION (MANDATORY KEYWORDS):
    Generated items MUST contain one of these keywords in their name to ensure icon rendering:
-   ${VALID_ITEM_KEYWORDS.slice(0, 30).join(", ")}, ...
+   ${PROMPT_ITEM_KEYWORDS.join(", ")}
 
    Examples:
    ✅ GOOD: "Ancient Elven Sword", "Healing Potion", "Rusty Key"
