@@ -81,8 +81,27 @@ The game uses a custom stat system inspired by Middle-earth themes:
 - Formula: Stat cost = `(value - 3) * 2` points
 
 **Health Calculation:**
+See `lib/rules.ts` for the exact formula:
 \`\`\`typescript
-maxHealth = 10 + (endurance * 2)
+import { calculateMaxHealth } from "./lib/rules"
+maxHealth = calculateMaxHealth(endurance) // Formula: 10 + (endurance * 2)
+\`\`\`
+
+**Stat Modifiers:**
+See `lib/rules.ts` for the exact formula:
+\`\`\`typescript
+import { getStatModifier } from "./lib/rules"
+modifier = getStatModifier(statValue) // Formula: value - 3
+// Stat 3 = +0, Stat 5 = +2, Stat 8 = +5
+\`\`\`
+
+**Difficulty Classes:**
+See `lib/rules.ts` for DC calculations:
+\`\`\`typescript
+import { calculateDC } from "./lib/rules"
+const easyDC = calculateDC("easy")     // 8
+const mediumDC = calculateDC("medium") // 12
+const hardDC = calculateDC("hard")     // 16
 \`\`\`
 
 ---
@@ -280,19 +299,34 @@ export type EnhancedChoice = {
 - **CRITICAL:** If `diceRoll` is provided, your narrative MUST reflect success/failure
   - Success: Character achieves their goal
   - Failure: Complications, setbacks, or alternative outcomes
-- Award XP for overcoming challenges (10-50 XP)
-- Inflict damage for failed rolls or dangerous situations (5-20 damage)
-- Grant gold for looting or completing objectives (5-100 gold)
+- Award XP for overcoming challenges (use XP_THRESHOLDS from lib/rules.ts)
+- Inflict damage for failed rolls or dangerous situations (use DAMAGE_TIERS from lib/rules.ts)
+- Grant gold for looting or completing objectives (use GOLD_REWARDS from lib/rules.ts)
 - Add items when narratively appropriate
 - Check `customConfig.modifications` and apply latest adjustments
 - Respect `combatFrequency` (1=minimal, 5=constant combat)
 - Maintain `tones` (dark, hopeful, mysterious, epic, etc.)
 
-**State Change Guidelines:**
-- **Health:** Damage on failed dangerous rolls, healing from finding potions/rest
-- **Gold:** Looting enemies, selling items, quest rewards
-- **XP:** 10-20 for minor challenges, 30-40 for moderate, 50+ for major victories
-- **Inventory:** Add quest items, weapons, potions when found
+**State Change Guidelines (USE lib/rules.ts):**
+- **Health:** Use damage tiers from `lib/rules.ts`:
+  \`\`\`typescript
+  import { DAMAGE_TIERS, calculateDamage } from "./lib/rules"
+  // TRIVIAL: 1-3, STANDARD: 4-8, DANGEROUS: 9-15, LETHAL: 16-25
+  const damage = calculateDamage("STANDARD") // Random 4-8
+  \`\`\`
+- **Gold:** Use gold rewards from `lib/rules.ts`:
+  \`\`\`typescript
+  import { GOLD_REWARDS, calculateGoldReward } from "./lib/rules"
+  // TRIVIAL: 1-5, COMMON: 5-15, UNCOMMON: 15-40, RARE: 40-100, LEGENDARY: 100-250
+  const gold = calculateGoldReward("COMMON") // Random 5-15
+  \`\`\`
+- **XP:** Use XP thresholds from `lib/rules.ts`:
+  \`\`\`typescript
+  import { XP_THRESHOLDS } from "./lib/rules"
+  // Level 2: 100 XP, Level 3: 250 XP, Level 4: 450 XP, etc.
+  // Award 10-50 XP per challenge based on difficulty
+  \`\`\`
+- **Inventory:** Add quest items, weapons, potions when found (use VALID_ITEM_KEYWORDS)
 - **Remove Items:** If used in narrative (e.g., "You use the key to unlock the door")
 
 ---
@@ -438,20 +472,34 @@ See `lib/character-data.ts` for full equipment lists.
 
 Items are rendered with icons based on **keyword matching** in the item name. Your AI must use these keywords when generating items.
 
-**Weapons:** sword, bow, dagger, knife, axe, spear, staff  
-**Armor:** shield, armor, chainmail, helmet  
-**Consumables:** potion, food, water, bread, elixir, bandage  
-**Treasure:** gold, gem, jewel, diamond, crown  
-**Books:** scroll, book, text, map, tome  
-**Magic:** magic, ancient, rune, enchanted, wand, amulet  
-**Tools:** rope, supplies, compass, lantern, torch  
+**All valid keywords are defined in `lib/rules.ts` (VALID_ITEM_KEYWORDS).**
+
+**Weapons:** sword, bow, dagger, knife, axe, spear, staff
+**Armor:** shield, armor, chainmail, helmet
+**Consumables:** potion, food, water, bread, elixir, bandage
+**Treasure:** gold, gem, jewel, diamond, crown
+**Books:** scroll, book, text, map, tome
+**Magic:** magic, ancient, rune, enchanted, wand, amulet
+**Tools:** rope, supplies, compass, lantern, torch
 
 **Example:**
 - ✅ Good: "Elven Dagger" (matches "dagger" → gets Feather icon)
 - ✅ Good: "Health Potion" (matches "potion" → gets Flask icon)
 - ❌ Bad: "Glimmering Shard" (no match → gets default Package icon)
 
-See `lib/item-icons.tsx` for the complete mapping.
+**Item Name Validation:**
+\`\`\`typescript
+import { validateItemName, suggestItemNameWithKeyword } from "./lib/rules"
+
+// Check if item name has valid keyword
+if (!validateItemName("Mysterious Shard")) {
+  // Suggest a name with keyword appended
+  const validName = suggestItemNameWithKeyword("Mysterious Shard", "treasure")
+  // Returns: "Mysterious Shard (Gem)"
+}
+\`\`\`
+
+See `lib/rules.ts` for the complete list of keywords and `lib/item-icons.tsx` for icon mappings.
 
 ---
 
@@ -522,8 +570,27 @@ Don't just say "You find treasure." Send:
 
 ### 4. XP and Leveling
 
-- Award 10-50 XP per challenge
-- Level up formula: `level = Math.floor(xp / 100) + 1`
+**IMPORTANT: Use the tiered XP system from lib/rules.ts**
+
+\`\`\`typescript
+import { XP_THRESHOLDS, calculateLevel, getXPForNextLevel } from "./lib/rules"
+
+// Award 10-50 XP per challenge
+// XP Thresholds (from lib/rules.ts):
+// Level 1: 0 XP
+// Level 2: 100 XP
+// Level 3: 250 XP
+// Level 4: 450 XP
+// Level 5: 750 XP
+// etc.
+
+// Calculate level from total XP
+const currentLevel = calculateLevel(totalXP)
+
+// Get XP needed for next level
+const nextLevelXP = getXPForNextLevel(currentLevel)
+\`\`\`
+
 - Frontend auto-detects level-ups and shows modal
 
 ### 5. Quest Completion Detection

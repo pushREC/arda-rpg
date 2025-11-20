@@ -1,3 +1,14 @@
+/**
+ * Item Icon Mapping for Inventory UI
+ *
+ * This file maps item name keywords to Lucide React icons.
+ * The keywords are centralized in lib/rules.ts (VALID_ITEM_KEYWORDS).
+ *
+ * When the AI generates items, it must use keywords from VALID_ITEM_KEYWORDS
+ * to ensure proper icon rendering in the UI.
+ *
+ * See lib/rules.ts for the authoritative list of valid keywords.
+ */
 import {
   Sword,
   Shield,
@@ -58,6 +69,10 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+/**
+ * Maps item name keywords to Lucide icons.
+ * Keywords match VALID_ITEM_KEYWORDS from lib/rules.ts.
+ */
 export const ITEM_ICONS: Record<string, LucideIcon> = {
   // Weapons - More variety
   sword: Sword,

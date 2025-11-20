@@ -1,7 +1,17 @@
 import type { Character, InventoryItem, ActiveEffect, CharacterStats } from "./types"
+import {
+  calculateLevel as calculateLevelFromRules,
+  getXPForNextLevel as getXPFromRules,
+  validateItemName,
+  suggestItemNameWithKeyword,
+} from "./rules"
 
 const SAVE_VERSION = "1.0.0"
 const MAX_INVENTORY_SIZE = 50
+
+/**
+ * @deprecated Use calculateLevel from lib/rules.ts instead
+ */
 const XP_PER_LEVEL = 100
 
 export function useItem(
@@ -173,12 +183,26 @@ export function loadAutoSave(): { success: boolean; data?: any } {
   }
 }
 
+/**
+ * Calculates current level from total XP.
+ * Uses the tiered XP system from lib/rules.ts.
+ *
+ * @param xp - Total experience points
+ * @returns Current level (1-10+)
+ */
 export function calculateLevel(xp: number): number {
-  return Math.floor(xp / XP_PER_LEVEL) + 1
+  return calculateLevelFromRules(xp)
 }
 
+/**
+ * Gets XP needed for the next level.
+ * Uses the tiered XP system from lib/rules.ts.
+ *
+ * @param currentLevel - The character's current level
+ * @returns XP threshold for next level
+ */
 export function getXPForNextLevel(currentLevel: number): number {
-  return currentLevel * XP_PER_LEVEL
+  return getXPFromRules(currentLevel)
 }
 
 export function checkLevelUp(
@@ -427,3 +451,8 @@ export function validateGameData(): { valid: boolean; character?: any; scenario?
     return { valid: false, error: "Corrupted game data" }
   }
 }
+
+/**
+ * Re-export item validation functions from lib/rules.ts for convenience.
+ */
+export { validateItemName, suggestItemNameWithKeyword }

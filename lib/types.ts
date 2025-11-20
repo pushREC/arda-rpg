@@ -2,6 +2,14 @@ export type Race = "human" | "elf" | "dwarf" | "hobbit"
 
 export type Background = "ranger" | "scholar" | "merchant" | "soldier" | "wanderer"
 
+/**
+ * Valid stat values (3-8 scale).
+ * - 3 = Weak (+0 modifier)
+ * - 5 = Average (+2 modifier)
+ * - 8 = Legendary (+5 modifier)
+ */
+export type StatValue = 3 | 4 | 5 | 6 | 7 | 8
+
 export type CharacterStats = {
   valor: number // Combat prowess, bravery (replaces attack)
   wisdom: number // Perception, insight
@@ -267,3 +275,21 @@ export type DiceRollData = {
   dc: number // Difficulty class
   success: boolean
 }
+
+/**
+ * Damage tiers for combat and hazards.
+ * See lib/rules.ts for actual damage ranges.
+ */
+export type DamageTier = "TRIVIAL" | "STANDARD" | "DANGEROUS" | "LETHAL"
+
+/**
+ * Difficulty levels for skill checks.
+ * Easy = DC 8, Medium = DC 12, Hard = DC 16
+ */
+export type DifficultyLevel = "easy" | "medium" | "hard"
+
+/**
+ * Gold reward tiers for loot.
+ * See lib/rules.ts for actual gold ranges.
+ */
+export type GoldTier = "TRIVIAL" | "COMMON" | "UNCOMMON" | "RARE" | "LEGENDARY"
