@@ -79,11 +79,27 @@ export const DAMAGE_TIERS = {
 export type DamageTier = keyof typeof DAMAGE_TIERS
 
 /**
+ * Detailed damage result for advanced use cases (critical hits, damage types, etc.)
+ * Use this for future features that need more than just a number.
+ */
+export type DamageResult = {
+  amount: number
+  tier: DamageTier
+  min: number
+  max: number
+  label: string
+  // Future fields (not yet implemented):
+  // critical?: boolean
+  // damageType?: "physical" | "fire" | "poison" | "magic"
+  // resistanceApplied?: boolean
+}
+
+/**
  * Calculates damage from a damage tier.
  *
  * @param tier - The damage tier (TRIVIAL, STANDARD, DANGEROUS, LETHAL)
  * @param variance - If true, returns random value in range. If false, returns average.
- * @returns The damage amount
+ * @returns The damage amount (simple number for MVP)
  */
 export function calculateDamage(tier: DamageTier, variance: boolean = true): number {
   const tierData = DAMAGE_TIERS[tier]
@@ -94,6 +110,27 @@ export function calculateDamage(tier: DamageTier, variance: boolean = true): num
   } else {
     // Average damage (useful for AI decision-making)
     return Math.floor((tierData.min + tierData.max) / 2)
+  }
+}
+
+/**
+ * Calculates detailed damage information (extended version).
+ * Use this when you need more context than just a number.
+ *
+ * @param tier - The damage tier
+ * @param variance - If true, returns random damage. If false, returns average.
+ * @returns Detailed damage result with metadata
+ */
+export function calculateDamageDetailed(tier: DamageTier, variance: boolean = true): DamageResult {
+  const tierData = DAMAGE_TIERS[tier]
+  const amount = calculateDamage(tier, variance)
+
+  return {
+    amount,
+    tier,
+    min: tierData.min,
+    max: tierData.max,
+    label: tierData.label,
   }
 }
 

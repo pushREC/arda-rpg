@@ -9,6 +9,7 @@ import {
   calculateMaxHealth,
   DAMAGE_TIERS,
   calculateDamage,
+  calculateDamageDetailed,
   XP_THRESHOLDS,
   calculateLevel,
   getXPForNextLevel,
@@ -100,6 +101,24 @@ test(
 // Test average damage
 const avgDamage = calculateDamage("STANDARD", false)
 test(`calculateDamage("STANDARD", false) === 6 (average)`, avgDamage === 6)
+
+// Test detailed damage result (future-proofing)
+console.log("\n🔬 Testing Detailed Damage Result (Future-Proofing):")
+const detailedDamage = calculateDamageDetailed("DANGEROUS")
+test(
+  "calculateDamageDetailed returns correct tier",
+  detailedDamage.tier === "DANGEROUS"
+)
+test("calculateDamageDetailed returns correct min", detailedDamage.min === 9)
+test("calculateDamageDetailed returns correct max", detailedDamage.max === 15)
+test(
+  "calculateDamageDetailed returns correct label",
+  detailedDamage.label === "severe injury"
+)
+test(
+  "calculateDamageDetailed amount in range",
+  detailedDamage.amount >= 9 && detailedDamage.amount <= 15
+)
 
 // ============================================================================
 // XP THRESHOLD TESTS
