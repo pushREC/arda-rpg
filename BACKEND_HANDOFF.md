@@ -1,14 +1,45 @@
 # Tales of Middle-earth RPG - Backend Developer Handoff Document
 
-**Version:** 1.0 (Production Ready)  
-**Date:** January 2025  
+**Version:** 1.0 (Production Ready)
+**Date:** January 2025
 **Status:** Frontend Complete - Backend Integration Required
+
+---
+
+## 📚 **REQUIRED READING**
+
+Before starting backend development, read these documents in order:
+
+1. **PRD.md** - Product requirements, MVP scope, tech stack decisions
+2. **BACKEND_HANDOFF.md** (this file) - API contracts, game rules, implementation guide
+3. **ZUSTAND_TO_CONTEXT_MIGRATION.md** - Post-MVP refactoring guide (optional)
+
+**Critical Files:**
+- `lib/types.ts` - All TypeScript type definitions
+- `lib/scenario-config.ts` - Game constants (regions, tones, vibes)
+- `lib/preset-scenarios.ts` - Example scenario configurations
+- `lib/game-logic.ts` - Frontend game logic utilities
+
+**Environment Setup:**
+```bash
+# Required environment variable
+OPENAI_API_KEY=sk-...
+
+# Install dependencies
+pnpm install
+
+# Run development server
+pnpm dev
+
+# Build for production
+pnpm build
+```
 
 ---
 
 ## 📋 Executive Summary
 
-This document is the **single source of truth** for backend development. The frontend is fully implemented with a polished parchment UI, complete state management, and comprehensive game systems. Your job is to build AI-powered backend logic that interfaces with the existing contracts documented here.
+This document is the **single source of truth** for backend API development. The frontend is fully implemented with a polished parchment UI, complete state management, and comprehensive game systems. Your job is to build AI-powered backend logic that interfaces with the existing contracts documented here.
 
 **What's Complete:**
 - ✅ Full character creation wizard with 6-stat system (not D&D)
@@ -581,16 +612,91 @@ Your backend is complete when:
 
 ---
 
-## 📞 Questions?
+## 📞 Questions & References
+
+### Documentation
+
+- **PRD.md** - Product requirements, tech stack decisions, MVP scope
+- **BACKEND_HANDOFF.md** (this file) - API contracts and implementation guide
+- **ZUSTAND_TO_CONTEXT_MIGRATION.md** - Post-MVP state management refactor (optional)
+
+### Code References
 
 If ambiguous, refer to these files:
-- `lib/types.ts` - All type definitions
-- `app/api/process-turn/route.ts` - Example AI prompt structure
-- `lib/preset-scenarios.ts` - Example of complete configs
-- `lib/game-logic.ts` - State change logic examples
+- `lib/types.ts` - All type definitions (Character, Scenario, EnhancedChoice, etc.)
+- `lib/scenario-config.ts` - Game constants (regions, tones, vibes, races, backgrounds)
+- `lib/preset-scenarios.ts` - Example of complete CustomScenarioConfig objects
+- `lib/game-logic.ts` - State change logic examples (item usage, level-up, etc.)
+- `lib/item-icons.tsx` - Item keyword to icon mapping (CRITICAL for inventory)
+- `app/api/process-turn/route.ts` - Example AI prompt structure (when implemented)
+- `app/api/generate-opening/route.ts` - Example opening narrative generation
 
-**This document is your contract.** Frontend expects these exact contracts.
+### Tech Stack Dependencies
+
+**Required for AI Integration:**
+- `ai` (Vercel AI SDK) - Unified LLM interface
+- OpenAI GPT-4o-mini model - Cost-effective narrative generation
+- Environment variable: `OPENAI_API_KEY`
+
+**Frontend Dependencies:**
+- Next.js 16.0.0 (App Router + API Routes)
+- React 19.2.0
+- Zustand (state management - will be replaced with React Context post-MVP)
+- Tailwind CSS 4.1.9
+- 8 Radix UI components (dialog, label, progress, scroll-area, separator, slider, slot, toast)
+- Lucide React icons
+- Sonner toast notifications
+
+**See PRD.md for complete tech stack details and cleanup rationale.**
+
+### AI Integration Resources
+
+**Vercel AI SDK Documentation:**
+- Official docs: https://sdk.vercel.ai/docs
+- `generateText()` API: https://sdk.vercel.ai/docs/reference/ai-sdk-core/generate-text
+- OpenAI provider: https://sdk.vercel.ai/providers/ai-sdk-providers/openai
+- Structured output: https://sdk.vercel.ai/docs/ai-sdk-core/generating-structured-data
+
+**OpenAI Documentation:**
+- GPT-4o-mini model: https://platform.openai.com/docs/models/gpt-4o-mini
+- Chat completions: https://platform.openai.com/docs/api-reference/chat
+- Prompt engineering: https://platform.openai.com/docs/guides/prompt-engineering
+
+### Implementation Checklist
+
+Backend developer should:
+- [ ] Read PRD.md for MVP scope and tech stack context
+- [ ] Set `OPENAI_API_KEY` environment variable
+- [ ] Run `pnpm install` to install dependencies
+- [ ] Review `lib/types.ts` for all TypeScript contracts
+- [ ] Implement all 5 API endpoints (`/api/*`)
+- [ ] Test with preset scenarios first (simpler)
+- [ ] Test custom scenarios (more complex)
+- [ ] Verify dice roll integration
+- [ ] Verify state changes (health, gold, XP, inventory)
+- [ ] Test mid-game scenario adjustments
+- [ ] Handle AI failures gracefully (fallback responses)
+- [ ] Use item keywords from `lib/item-icons.tsx`
+- [ ] Run `pnpm build` to verify no TypeScript errors
+
+### Edge Cases to Handle
+
+1. **AI Failures**: OpenAI API timeout or rate limit → Return fallback narrative
+2. **Corrupted Data**: Invalid character or scenario → Validate before processing
+3. **Empty Inventory**: Player uses item not in inventory → Validate before removal
+4. **Health Edge Cases**: Damage kills player → Set `showGameOver: true`
+5. **XP Overflow**: Level-up mid-turn → Frontend auto-detects with `Math.floor(xp / 100) + 1`
+6. **Missing Config**: Scenario without customConfig → Use defaults from preset-scenarios
+
+### Performance Targets
+
+- **API Response Time**: < 2 seconds (including OpenAI call)
+- **Narrative Quality**: Coherent, maintains tone and context
+- **State Changes**: Always granular (specific amounts, not vague)
+- **Choice Relevance**: Match character stats (high valor = combat options)
 
 ---
+
+**This document is your contract.** Frontend expects these exact API contracts.
 
 **Good luck, and may your code be as legendary as the tales of Middle-earth!** 🧙‍♂️⚔️
