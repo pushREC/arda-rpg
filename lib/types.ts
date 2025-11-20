@@ -226,7 +226,6 @@ export type GameSaveData = {
   id: string
   version: string // for save format compatibility
   characterName: string
-  scenario: string
   timestamp: Date
   health: number
   maxHealth: number
@@ -295,4 +294,3 @@ export type DifficultyLevel = "easy" | "medium" | "hard"
  * See lib/rules.ts for actual gold ranges.
  */
 export type GoldTier = "TRIVIAL" | "COMMON" | "UNCOMMON" | "RARE" | "LEGENDARY"
-main
