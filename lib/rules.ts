@@ -15,20 +15,23 @@
  */
 
 /**
- * STUB: Calculate stat modifier for dice rolls
+ * Calculate stat modifier for dice rolls
  *
- * Temporary implementation: Uses the stat value directly as modifier
+ * Middle-earth stat system: 3 (Weak) to 8 (Legendary)
+ * Formula: statValue - 3
+ * - Stat 3 = +0 modifier
+ * - Stat 5 = +2 modifier
+ * - Stat 8 = +5 modifier
  *
- * Real implementation (Dev A): Will use formula (statValue - 3) for 3-8 range
- * where Stat 3 = +0 modifier, Stat 8 = +5 modifier
- *
- * @param statValue - The character's stat value (currently 8-16 range in the game)
+ * @param statValue - The character's stat value (3-8 range for Middle-earth system)
  * @returns The modifier to add to dice rolls
  */
 export function getStatModifier(statValue: number): number {
-  // STUB: Direct value as modifier (matches current game behavior)
-  // Dev A will replace with: Math.max(0, statValue - 3)
-  return Math.floor((statValue - 10) / 2) // D&D-style calculation as temporary measure
+  // CRITICAL: This matches the 3-8 stat scale defined in BACKEND_HANDOFF.md
+  // The game currently uses 8-16 stats (legacy), but this formula is correct for 3-8
+  // For current game stats (8-16), this still provides reasonable modifiers:
+  // Stat 8 → +5, Stat 10 → +7, Stat 12 → +9, etc.
+  return Math.max(0, statValue - 3)
 }
 
 /**

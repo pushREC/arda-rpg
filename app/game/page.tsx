@@ -16,7 +16,7 @@ import { ItemDetailModal } from "@/components/item-detail-modal"
 import { SaveLoadModal } from "@/components/save-load-modal"
 import { QuestTracker } from "@/components/quest-tracker"
 import { LevelUpModal } from "@/components/level-up-modal"
-import type { StoryEntry, EnhancedChoice, StatType, CustomScenarioConfig } from "@/lib/types"
+import type { StoryEntry, EnhancedChoice, StatType, CustomScenarioConfig, InventoryItem } from "@/lib/types"
 import { toast } from "sonner"
 import { unlockAchievement, getAchievementById } from "@/lib/achievements"
 import {
@@ -36,6 +36,7 @@ import {
 import { getStatModifier } from "@/lib/rules"
 import { modalQueue } from "@/lib/modal-queue"
 import { NotificationManager, useNotifications } from "@/components/notification-manager"
+import { useGameStore } from "@/lib/game-state"
 
 function GamePageContent() {
   const router = useRouter()
@@ -75,7 +76,7 @@ function GamePageContent() {
   const [activeEffects, setActiveEffects] = React.useState<any[]>([])
   const [currentQueuedModal, setCurrentQueuedModal] = React.useState<any>(null)
   const [retryCount, setRetryCount] = React.useState(0)
-  const [selectedItem, setSelectedItem] = React.useState<any>(null)
+  const [selectedItem, setSelectedItem] = React.useState<InventoryItem | null>(null)
   const [showItemDetail, setShowItemDetail] = React.useState(false)
   const MAX_RETRIES = 3
   const loadingTimeoutRef = React.useRef<NodeJS.Timeout>()
@@ -85,7 +86,7 @@ function GamePageContent() {
     storyEntries.length > 0 && storyEntries[storyEntries.length - 1]?.text?.toLowerCase().includes("combat")
 
   const handleUseItem = React.useCallback(
-    (item: any) => {
+    (item: InventoryItem) => {
       const result = applyItem(item, character, currentHealth)
 
       if (result.success) {
@@ -112,7 +113,7 @@ function GamePageContent() {
   )
 
   const handleEquipItem = React.useCallback(
-    (item: any) => {
+    (item: InventoryItem) => {
       const updatedCharacter = equipItem(item, character)
       setCharacter(updatedCharacter)
       localStorage.setItem("character", JSON.stringify(updatedCharacter))
@@ -125,7 +126,7 @@ function GamePageContent() {
   )
 
   const handleDropItem = React.useCallback(
-    (item: any) => {
+    (item: InventoryItem) => {
       const updatedInventory = character.inventory.filter((i: any) => i.id !== item.id)
       const updatedCharacter = { ...character, inventory: updatedInventory }
       setCharacter(updatedCharacter)
@@ -139,22 +140,25 @@ function GamePageContent() {
   )
 
   const handleSellItem = React.useCallback(
-    (item: any, sellValue: number) => {
-      const updatedInventory = character.inventory.filter((i: any) => i.id !== item.id)
-      const updatedCharacter = {
-        ...character,
-        inventory: updatedInventory,
-        gold: (character.gold || 0) + sellValue,
+    (item: InventoryItem, sellValue: number) => {
+      // CRITICAL: Update Zustand store first (persistent source of truth)
+      const store = useGameStore.getState()
+      store.removeInventoryItem(item.id)
+      store.addGold(sellValue)
+
+      // Then sync local state from Zustand to ensure consistency
+      const updatedCharacter = useGameStore.getState().character
+      if (updatedCharacter) {
+        setCharacter(updatedCharacter)
+        // Zustand persist middleware handles localStorage automatically
       }
-      setCharacter(updatedCharacter)
-      localStorage.setItem("character", JSON.stringify(updatedCharacter))
 
       addNotification("gold", sellValue)
       toast.success(`Sold ${item.name}`, {
         description: `+${sellValue} gold`,
       })
     },
-    [character, addNotification],
+    [addNotification],
   )
 
   React.useEffect(() => {

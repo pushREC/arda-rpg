@@ -1,10 +1,11 @@
 "use client"
 import { X, Swords, Shield, Heart, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import type { InventoryItem } from "@/lib/types"
 
 interface ItemDetailModalProps {
   isOpen: boolean
-  item: any
+  item: InventoryItem | null
   onClose: () => void
   onUse?: () => void
   onEquip?: () => void
