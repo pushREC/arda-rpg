@@ -1,3 +1,14 @@
+/**
+ * Item Icon Mapping for Inventory UI
+ *
+ * This file maps item name keywords to Lucide React icons.
+ * The keywords are centralized in lib/rules.ts (VALID_ITEM_KEYWORDS).
+ *
+ * When the AI generates items, it must use keywords from VALID_ITEM_KEYWORDS
+ * to ensure proper icon rendering in the UI.
+ *
+ * See lib/rules.ts for the authoritative list of valid keywords.
+ */
 import {
   Sword,
   Shield,
@@ -58,6 +69,10 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+/**
+ * Maps item name keywords to Lucide icons.
+ * Keywords match VALID_ITEM_KEYWORDS from lib/rules.ts.
+ */
 export const ITEM_ICONS: Record<string, LucideIcon> = {
   // Weapons - More variety
   sword: Sword,
@@ -258,6 +273,25 @@ export const ITEM_ICONS: Record<string, LucideIcon> = {
   default: Package,
 }
 
+/**
+ * Adjective keywords (low priority) - these are modifiers, not item types.
+ * Only match these if no specific item type is found.
+ */
+const ADJECTIVE_KEYWORDS = [
+  "gold",
+  "golden",
+  "silver",
+  "ancient",
+  "magic",
+  "enchanted",
+  "old",
+  "fine",
+  "crude",
+  "rusty",
+  "broken",
+  "weathered",
+]
+
 export function getItemIcon(itemName: string): LucideIcon {
   const normalizedName = itemName.toLowerCase().trim()
 
@@ -266,11 +300,27 @@ export function getItemIcon(itemName: string): LucideIcon {
     return ITEM_ICONS[normalizedName]
   }
 
-  // Try partial match
+  // Collect all matches with priority scoring
+  const matches: Array<{ key: string; icon: LucideIcon; priority: number }> = []
+
   for (const [key, icon] of Object.entries(ITEM_ICONS)) {
+    if (key === "default") continue
+
     if (normalizedName.includes(key) || key.includes(normalizedName)) {
-      return icon
+      // Calculate priority:
+      // - Longer matches are more specific (e.g., "longsword" > "sword")
+      // - Adjectives get lower priority
+      const isAdjective = ADJECTIVE_KEYWORDS.includes(key)
+      const priority = isAdjective ? key.length : key.length + 100
+
+      matches.push({ key, icon, priority })
     }
+  }
+
+  // Return highest priority match
+  if (matches.length > 0) {
+    matches.sort((a, b) => b.priority - a.priority)
+    return matches[0].icon
   }
 
   // Default fallback
