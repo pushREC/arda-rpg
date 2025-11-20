@@ -33,6 +33,7 @@ import {
   validateAIResponse,
   validateGameData,
 } from "@/lib/game-logic"
+import { getStatModifier } from "@/lib/rules"
 import { modalQueue } from "@/lib/modal-queue"
 import { NotificationManager, useNotifications } from "@/components/notification-manager"
 
@@ -135,6 +136,25 @@ function GamePageContent() {
       })
     },
     [character],
+  )
+
+  const handleSellItem = React.useCallback(
+    (item: any, sellValue: number) => {
+      const updatedInventory = character.inventory.filter((i: any) => i.id !== item.id)
+      const updatedCharacter = {
+        ...character,
+        inventory: updatedInventory,
+        gold: (character.gold || 0) + sellValue,
+      }
+      setCharacter(updatedCharacter)
+      localStorage.setItem("character", JSON.stringify(updatedCharacter))
+
+      addNotification("gold", sellValue)
+      toast.success(`Sold ${item.name}`, {
+        description: `+${sellValue} gold`,
+      })
+    },
+    [character, addNotification],
   )
 
   React.useEffect(() => {
@@ -456,8 +476,7 @@ What will you do?`
 
     if (enhancedChoice?.requiresRoll && enhancedChoice.stat && enhancedChoice.dc) {
       const statValue = character?.stats?.[enhancedChoice.stat] || 10
-      // Stat value IS the modifier (not D&D's (stat-10)/2 formula)
-      const modifier = statValue
+      const modifier = getStatModifier(statValue)
 
       const statDisplayNames: Record<string, string> = {
         valor: "Valor",
@@ -470,13 +489,21 @@ What will you do?`
 
       setTimeout(() => {
         triggerDiceRoll(
-          (result) => {
-            const success = result >= enhancedChoice.dc!
+          (total) => {
+            const roll = total - modifier // Extract base roll
+            const success = total >= enhancedChoice.dc!
 
+            // Immediate feedback toast BEFORE narrative
             if (success) {
+              toast.success(`Roll ${roll} + ${modifier} = ${total} (DC ${enhancedChoice.dc})`, {
+                description: "Success!",
+              })
               addStoryEntry("narration", "Success! Your skill sees you through.")
               continueStoryAfterChoice(choiceText, true)
             } else {
+              toast.error(`Roll ${roll} + ${modifier} = ${total} (DC ${enhancedChoice.dc})`, {
+                description: "Failed!",
+              })
               addStoryEntry("narration", "The attempt fails. Things take a turn for the worse...")
               continueStoryAfterChoice(choiceText, false)
             }
@@ -1042,6 +1069,11 @@ What will you do?`
                 }
               : undefined
           }
+          onSell={(sellValue) => {
+            handleSellItem(selectedItem, sellValue)
+            setShowItemDetail(false)
+            setSelectedItem(null)
+          }}
           onDrop={() => {
             handleDropItem(selectedItem)
             setShowItemDetail(false)

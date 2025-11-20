@@ -83,6 +83,7 @@ interface GameStoreActions {
   addInventoryItem: (item: any) => void
   removeInventoryItem: (itemId: string) => void
   updateInventory: (inventory: any[]) => void
+  addGold: (amount: number) => void
 
   // Game control
   resetGame: () => void
@@ -296,6 +297,19 @@ export const useGameStore = create<GameStore>()(
           character: {
             ...character,
             inventory,
+          },
+          lastSaved: Date.now(),
+        })
+      },
+
+      addGold: (amount) => {
+        const character = get().character
+        if (!character) return
+
+        set({
+          character: {
+            ...character,
+            gold: (character.gold || 0) + amount,
           },
           lastSaved: Date.now(),
         })

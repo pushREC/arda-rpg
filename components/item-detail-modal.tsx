@@ -9,10 +9,13 @@ interface ItemDetailModalProps {
   onUse?: () => void
   onEquip?: () => void
   onDrop?: () => void
+  onSell?: (sellValue: number) => void
 }
 
-export function ItemDetailModal({ isOpen, item, onClose, onUse, onEquip, onDrop }: ItemDetailModalProps) {
+export function ItemDetailModal({ isOpen, item, onClose, onUse, onEquip, onDrop, onSell }: ItemDetailModalProps) {
   if (!isOpen || !item) return null
+
+  const sellValue = Math.floor((item.value || 0) / 2)
 
   const getItemIcon = () => {
     if (item.type === "weapon") return Swords
@@ -75,6 +78,15 @@ export function ItemDetailModal({ isOpen, item, onClose, onUse, onEquip, onDrop 
             {onEquip && (item.type === "weapon" || item.type === "armor") && (
               <Button onClick={onEquip} className="w-full bg-[hsl(30,50%,40%)] hover:bg-[hsl(30,50%,35%)] text-white">
                 {item.equipped ? "Unequip" : "Equip"}
+              </Button>
+            )}
+            {onSell && item.type !== "quest" && item.value && item.value > 0 && (
+              <Button
+                onClick={() => onSell(sellValue)}
+                variant="outline"
+                className="w-full border-2 border-[hsl(35,60%,50%)] text-[hsl(35,60%,40%)] hover:bg-[hsl(35,60%,95%)] bg-transparent"
+              >
+                Sell for {sellValue} Gold
               </Button>
             )}
             {onDrop && (
