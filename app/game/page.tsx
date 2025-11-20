@@ -763,19 +763,29 @@ What will you do?`
       }
 
       const turnCount = storyEntries.filter((e) => e.type === "action").length + 1
-      if (combinedChanges.questComplete || detectQuestCompletion(narrative, turnCount, scenario)) {
-        modalQueue.enqueue(
-          "victory",
-          {
-            questName: scenario.title,
-            finalStats: {
-              turns: turnCount,
-              gold: character.gold || 0,
-              experience: currentXP,
+
+      // Check for the "Quest Complete" flag from Sprint 2 (Dev B)
+      // Priority: API nested structure > top-level fallback > narrative detection
+      const questCompleteFromAPI = data.stateChanges?.questProgress?.questComplete
+      const questCompleteTopLevel = combinedChanges.questComplete  // Legacy fallback
+      const questCompleteDetected = detectQuestCompletion(narrative, turnCount, scenario)
+
+      if (questCompleteFromAPI || questCompleteTopLevel || questCompleteDetected) {
+        // Allow a small delay for the narrative to read, then show Victory
+        setTimeout(() => {
+          modalQueue.enqueue(
+            "victory",
+            {
+              questName: scenario.title,
+              finalStats: {
+                turns: turnCount,
+                gold: character.gold || 0,
+                experience: currentXP,
+              },
             },
-          },
-          100,
-        )
+            100,
+          )
+        }, 2000)
       }
 
       addStoryEntry("narration", narrative)
