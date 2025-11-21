@@ -22,6 +22,7 @@ import * as React from "react"
 import { GameModal } from "./game-modal"
 import { InventoryItemCard } from "./inventory-item"
 import { ItemDetailModal } from "./item-detail-modal"
+import type { ActiveEffect } from "@/lib/types"
 
 interface CharacterPanelProps {
   character: any
@@ -29,6 +30,7 @@ interface CharacterPanelProps {
   className?: string
   onViewAchievements?: () => void
   onItemClick?: (item: any) => void
+  activeEffects?: ActiveEffect[]
 }
 
 export function CharacterPanel({
@@ -37,6 +39,7 @@ export function CharacterPanel({
   className,
   onViewAchievements,
   onItemClick,
+  activeEffects,
 }: CharacterPanelProps) {
   console.log("[v0] CharacterPanel received character:", character)
 
@@ -166,6 +169,28 @@ export function CharacterPanel({
             </div>
           </div>
         </div>
+
+        {/* [TICKET 15.2] Active Effects / Buffs Display */}
+        {activeEffects && activeEffects.length > 0 && (
+          <div className="space-y-2 pt-2 border-t border-[hsl(35,40%,70%)]">
+            <p className="text-[10px] font-bold uppercase text-red-600 tracking-wide">
+              Active Buffs ({activeEffects.length})
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {activeEffects.map(effect => (
+                <div key={effect.id} className="bg-yellow-50 border border-yellow-300 p-2 rounded text-xs">
+                  <span className="font-semibold">{effect.name}</span>
+                  <span className="block text-yellow-700">
+                    {effect.value > 0 ? "+" : ""}{effect.value} {effect.stat}
+                  </span>
+                  <span className="text-[10px] text-yellow-500">
+                    {effect.remainingTurns} turns left
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <Separator className="bg-[hsl(35,40%,70%)]" />
 

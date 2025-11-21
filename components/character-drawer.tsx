@@ -5,6 +5,7 @@ import { X } from "lucide-react"
 import { CharacterPanel } from "@/components/character-panel"
 import { Button } from "@/components/ui/button"
 import { modalQueue } from "@/lib/modal-queue"
+import type { ActiveEffect } from "@/lib/types"
 
 interface CharacterDrawerProps {
   character: any
@@ -13,6 +14,7 @@ interface CharacterDrawerProps {
   onClose: () => void
   onViewAchievements?: () => void
   onItemClick?: (item: any) => void
+  activeEffects?: ActiveEffect[]
 }
 
 export function CharacterDrawer({
@@ -22,6 +24,7 @@ export function CharacterDrawer({
   onClose,
   onViewAchievements,
   onItemClick,
+  activeEffects,
 }: CharacterDrawerProps) {
   React.useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -76,6 +79,7 @@ export function CharacterDrawer({
               currentHealth={currentHealth}
               onViewAchievements={onViewAchievements}
               onItemClick={onItemClick}
+              activeEffects={activeEffects}
             />
           </div>
         </div>
