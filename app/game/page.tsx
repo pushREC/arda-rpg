@@ -399,7 +399,12 @@ function GamePageContent() {
         if (healthChange > 0) {
           addNotification("health", healthChange)
         } else if (healthChange < 0) {
-          addNotification("damage", Math.abs(healthChange))
+          // Check for critical hit (>8 damage is 'Dangerous' tier max)
+          if (healthChange < -8) {
+            addNotification("crit", Math.abs(healthChange))
+          } else {
+            addNotification("damage", Math.abs(healthChange))
+          }
         }
       }
 
@@ -834,7 +839,12 @@ What will you do?`
         if (healthChange > 0) {
           addNotification("health", healthChange)
         } else if (healthChange < 0) {
-          addNotification("damage", Math.abs(healthChange))
+          // Check for critical hit (>8 damage is 'Dangerous' tier max)
+          if (healthChange < -8) {
+            addNotification("crit", Math.abs(healthChange))
+          } else {
+            addNotification("damage", Math.abs(healthChange))
+          }
         }
       }
 
@@ -1139,6 +1149,9 @@ What will you do?`
           statName={(diceConfig as any).statName}
           bonus={(diceConfig as any).bonus}
           advantage={(diceConfig as any).advantage}
+          currentHealth={currentHealth}
+          maxHealth={character?.maxHealth}
+          statValue={currentStats?.[diceConfig.statName?.toLowerCase() as keyof typeof currentStats] || character?.stats?.[diceConfig.statName?.toLowerCase() as keyof typeof character.stats] || 10}
         />
       )}
 
@@ -1162,6 +1175,8 @@ What will you do?`
             gold: character.gold || 0,
             experience: currentXP,
           }}
+          storyEntries={storyEntries}
+          characterName={character.name}
         />
       )}
 

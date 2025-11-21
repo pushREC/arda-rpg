@@ -1,9 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { Heart, Coins, Package, Sparkles, Swords, Shield } from "lucide-react"
+import { Heart, Coins, Package, Sparkles, Swords, Shield, Skull } from "lucide-react"
 
-export type NotificationType = "health" | "gold" | "item" | "xp" | "damage" | "defense"
+export type NotificationType = "health" | "gold" | "item" | "xp" | "damage" | "defense" | "crit"
 
 interface FloatingNotificationProps {
   type: NotificationType
@@ -22,6 +22,7 @@ const typeConfig: Record<
   xp: { icon: Sparkles, color: "text-purple-600", prefix: "+", bgColor: "bg-purple-100 border-purple-300" },
   damage: { icon: Swords, color: "text-red-600", prefix: "-", bgColor: "bg-red-100 border-red-300" },
   defense: { icon: Shield, color: "text-cyan-600", prefix: "+", bgColor: "bg-cyan-100 border-cyan-300" },
+  crit: { icon: Skull, color: "text-red-600", prefix: "CRITICAL HIT! -", bgColor: "bg-red-100 border-red-600 border-4 scale-110 shadow-[0_0_15px_rgba(220,38,38,0.5)]" },
 }
 
 export function FloatingNotification({ type, value, id, onComplete }: FloatingNotificationProps) {
