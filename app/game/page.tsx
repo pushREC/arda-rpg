@@ -369,10 +369,10 @@ function GamePageContent() {
       return
     }
 
-    // [TICKET 13.4] Rest Mechanics with Dice Roll
-    // Calculate DC: Base 10 + (combatFrequency * 2)
-    const combatFrequency = scenario?.customConfig?.combatFrequency || 3
-    const dc = 10 + (combatFrequency * 2)
+    // [TICKET 15.3A] Rest Mechanics with Dice Roll - Updated DC formula
+    // Calculate DC: Base 12 + (character level * 2) - Scales with player progression
+    const REST_DC = 12 + (currentLevel * 2)
+    const dc = REST_DC
 
     // Get the endurance stat for the survival check
     const enduranceStat = currentStats?.endurance || character?.stats?.endurance || 10
@@ -459,7 +459,7 @@ function GamePageContent() {
       })
       setIsLoading(false)
     }
-  }, [character, scenario, storyEntries, isInCombat, currentHealth, currentStats, addNotification])
+  }, [character, scenario, storyEntries, isInCombat, currentHealth, currentStats, addNotification, currentLevel])
 
   const startGame = async (charData: any, scenarioData: any) => {
     setIsLoading(true)
@@ -1238,6 +1238,7 @@ What will you do?`
                   setSelectedItem(item)
                   setShowItemDetail(true)
                 }}
+                activeEffects={activeEffects}
               />
             </div>
           </aside>
@@ -1254,6 +1255,7 @@ What will you do?`
           setSelectedItem(item)
           setShowItemDetail(true)
         }}
+        activeEffects={activeEffects}
       />
 
       {showAchievements && <AchievementsModal onClose={() => setShowAchievements(false)} />}
