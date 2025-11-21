@@ -6,6 +6,7 @@ import {
   suggestItemNameWithKeyword,
   calculateDerivedStats,
 } from "./rules"
+import { generateUUID } from "./utils"
 
 const SAVE_VERSION = "1.0.0"
 const MAX_INVENTORY_SIZE = 50
@@ -82,7 +83,7 @@ export function useItem(
           success: true,
           message: `${item.name} takes effect!`,
           effect: {
-            id: Date.now().toString(),
+            id: generateUUID(),
             name: item.name,
             type: "buff",
             value: item.effect.value,

@@ -12,6 +12,8 @@ interface DiceRollerProps {
   modifier?: number
   reason?: string
   statName?: string
+  bonus?: number
+  advantage?: boolean
 }
 
 type DiceState = "ready" | "rolling" | "slowing" | "result"
@@ -23,10 +25,13 @@ export function DiceRoller({
   modifier = 0,
   reason = "Roll to determine the outcome",
   statName,
+  bonus = 0,
+  advantage = false,
 }: DiceRollerProps) {
   const [diceState, setDiceState] = React.useState<DiceState>("ready")
   const [result, setResult] = React.useState<number | null>(null)
   const [displayValue, setDisplayValue] = React.useState<number>(1)
+  const [secondaryValue, setSecondaryValue] = React.useState<number>(1)
   const [particles, setParticles] = React.useState<Array<{ id: number; x: number; y: number }>>([])
 
   const rollDice = () => {
@@ -34,13 +39,19 @@ export function DiceRoller({
     setResult(null)
     setParticles([])
 
-    // Pre-determine the final result
-    const finalResult = Math.floor(Math.random() * diceType) + 1
+    // Pre-determine the final results
+    const roll1 = Math.floor(Math.random() * diceType) + 1
+    const roll2 = advantage ? Math.floor(Math.random() * diceType) + 1 : 0
+    const finalBase = advantage ? Math.max(roll1, roll2) : roll1
+    const finalResult = finalBase + modifier + bonus
 
     let cycleCount = 0
     const fastCycles = 24 // 24 cycles at 50ms = 1200ms
     const fastInterval = setInterval(() => {
       setDisplayValue(Math.floor(Math.random() * diceType) + 1)
+      if (advantage) {
+        setSecondaryValue(Math.floor(Math.random() * diceType) + 1)
+      }
       cycleCount++
 
       if (cycleCount >= fastCycles) {
@@ -50,12 +61,20 @@ export function DiceRoller({
         const slowValues = [
           Math.floor(Math.random() * diceType) + 1,
           Math.floor(Math.random() * diceType) + 1,
-          finalResult,
+          roll1,
         ]
+        const slowValues2 = advantage ? [
+          Math.floor(Math.random() * diceType) + 1,
+          Math.floor(Math.random() * diceType) + 1,
+          roll2,
+        ] : []
         let slowIndex = 0
 
         const slowInterval = setInterval(() => {
           setDisplayValue(slowValues[slowIndex])
+          if (advantage && slowValues2[slowIndex]) {
+            setSecondaryValue(slowValues2[slowIndex])
+          }
           slowIndex++
 
           if (slowIndex >= slowValues.length) {
@@ -65,7 +84,7 @@ export function DiceRoller({
               setResult(finalResult)
               setDiceState("result")
 
-              if (finalResult === diceType || finalResult === 1) {
+              if (roll1 === diceType || roll1 === 1 || (advantage && (roll2 === diceType || roll2 === 1))) {
                 const newParticles = Array.from({ length: 16 }, (_, i) => ({
                   id: Date.now() + i,
                   x: Math.cos((i * Math.PI * 2) / 16) * 80,
@@ -83,8 +102,7 @@ export function DiceRoller({
 
   const handleConfirm = () => {
     if (result !== null) {
-      const total = result + modifier
-      onRoll(total)
+      onRoll(result)
     }
   }
 
@@ -92,9 +110,10 @@ export function DiceRoller({
     rollDice()
   }
 
-  const totalResult = result !== null ? result + modifier : null
-  const isCriticalSuccess = result === diceType
-  const isCriticalFailure = result === 1
+  const totalResult = result
+  const baseRoll = result !== null ? result - modifier - bonus : null
+  const isCriticalSuccess = baseRoll === diceType
+  const isCriticalFailure = baseRoll === 1
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
@@ -133,10 +152,20 @@ export function DiceRoller({
               <h2 className="text-2xl font-bold tracking-tight text-[hsl(30,40%,15%)]">
                 {statName ? `${statName} Test` : "Rolling..."}
               </h2>
+              {advantage && (
+                <p className="text-sm text-[hsl(45,70%,50%)] font-bold">
+                  ⚡ Advantage Active!
+                </p>
+              )}
               {modifier !== 0 && statName && (
                 <p className="text-sm text-[hsl(35,40%,45%)] font-medium">
-                  {statName} Bonus: {modifier > 0 ? "+" : ""}
+                  {statName} Modifier: {modifier > 0 ? "+" : ""}
                   {modifier}
+                </p>
+              )}
+              {bonus !== 0 && (
+                <p className="text-sm text-[hsl(35,40%,45%)] font-medium">
+                  Bonus: +{bonus}
                 </p>
               )}
             </div>
@@ -151,50 +180,130 @@ export function DiceRoller({
           </div>
 
           <div className="flex flex-col items-center justify-center py-8 space-y-6">
-            <div className="relative">
-              <div
-                className={cn(
-                  "w-36 h-36 rounded-lg flex items-center justify-center relative border-2",
-                  "transition-all duration-200",
-                  "bg-[hsl(40,50%,88%)] border-[hsl(30,40%,25%)]",
-                  diceState === "rolling" && "scale-105",
-                  diceState === "slowing" && "scale-102",
-                  diceState === "result" && "scale-110 shadow-card-hover",
-                  isCriticalSuccess &&
-                    diceState === "result" &&
-                    "border-[hsl(45,80%,65%)] bg-[hsl(45,80%,92%)] shadow-[0_0_20px_hsl(45,80%,65%,0.3)]",
-                  isCriticalFailure &&
-                    diceState === "result" &&
-                    "border-[hsl(0,70%,50%)] bg-[hsl(0,70%,92%)] shadow-[0_0_20px_hsl(0,70%,50%,0.3)]",
-                )}
-              >
-                <span
-                  className={cn(
-                    "text-7xl font-black text-[hsl(30,40%,20%)] transition-all duration-200",
-                    diceState === "rolling" && "opacity-70",
-                    diceState === "slowing" && "opacity-85",
-                    diceState === "result" && "animate-in zoom-in duration-300",
-                  )}
-                >
-                  {displayValue}
-                </span>
+            {advantage ? (
+              <div className="flex gap-4">
+                {/* First Die */}
+                <div className="relative">
+                  <div
+                    className={cn(
+                      "w-28 h-28 rounded-lg flex items-center justify-center relative border-2",
+                      "transition-all duration-200",
+                      "bg-[hsl(40,50%,88%)] border-[hsl(30,40%,25%)]",
+                      diceState === "rolling" && "scale-105",
+                      diceState === "slowing" && "scale-102",
+                      diceState === "result" && displayValue >= secondaryValue && "scale-110 border-[hsl(120,50%,45%)] shadow-[0_0_15px_hsl(120,50%,45%,0.3)]",
+                      diceState === "result" && displayValue < secondaryValue && "scale-95 opacity-50",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "text-6xl font-black text-[hsl(30,40%,20%)] transition-all duration-200",
+                        diceState === "rolling" && "opacity-70",
+                        diceState === "slowing" && "opacity-85",
+                        diceState === "result" && "animate-in zoom-in duration-300",
+                      )}
+                    >
+                      {displayValue}
+                    </span>
+                    <div className="absolute top-2 right-2 text-xs font-bold text-[hsl(30,40%,40%)] bg-[hsl(45,50%,85%)] px-2 py-0.5 rounded border border-[hsl(30,40%,50%)]">
+                      d{diceType}
+                    </div>
+                  </div>
+                </div>
 
-                <div className="absolute top-2 right-2 text-xs font-bold text-[hsl(30,40%,40%)] bg-[hsl(45,50%,85%)] px-2 py-0.5 rounded border border-[hsl(30,40%,50%)]">
-                  d{diceType}
+                {/* Second Die */}
+                <div className="relative">
+                  <div
+                    className={cn(
+                      "w-28 h-28 rounded-lg flex items-center justify-center relative border-2",
+                      "transition-all duration-200",
+                      "bg-[hsl(40,50%,88%)] border-[hsl(30,40%,25%)]",
+                      diceState === "rolling" && "scale-105",
+                      diceState === "slowing" && "scale-102",
+                      diceState === "result" && secondaryValue >= displayValue && "scale-110 border-[hsl(120,50%,45%)] shadow-[0_0_15px_hsl(120,50%,45%,0.3)]",
+                      diceState === "result" && secondaryValue < displayValue && "scale-95 opacity-50",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "text-6xl font-black text-[hsl(30,40%,20%)] transition-all duration-200",
+                        diceState === "rolling" && "opacity-70",
+                        diceState === "slowing" && "opacity-85",
+                        diceState === "result" && "animate-in zoom-in duration-300",
+                      )}
+                    >
+                      {secondaryValue}
+                    </span>
+                    <div className="absolute top-2 right-2 text-xs font-bold text-[hsl(30,40%,40%)] bg-[hsl(45,50%,85%)] px-2 py-0.5 rounded border border-[hsl(30,40%,50%)]">
+                      d{diceType}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="relative">
+                <div
+                  className={cn(
+                    "w-36 h-36 rounded-lg flex items-center justify-center relative border-2",
+                    "transition-all duration-200",
+                    "bg-[hsl(40,50%,88%)] border-[hsl(30,40%,25%)]",
+                    diceState === "rolling" && "scale-105",
+                    diceState === "slowing" && "scale-102",
+                    diceState === "result" && "scale-110 shadow-card-hover",
+                    isCriticalSuccess &&
+                      diceState === "result" &&
+                      "border-[hsl(45,80%,65%)] bg-[hsl(45,80%,92%)] shadow-[0_0_20px_hsl(45,80%,65%,0.3)]",
+                    isCriticalFailure &&
+                      diceState === "result" &&
+                      "border-[hsl(0,70%,50%)] bg-[hsl(0,70%,92%)] shadow-[0_0_20px_hsl(0,70%,50%,0.3)]",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "text-7xl font-black text-[hsl(30,40%,20%)] transition-all duration-200",
+                      diceState === "rolling" && "opacity-70",
+                      diceState === "slowing" && "opacity-85",
+                      diceState === "result" && "animate-in zoom-in duration-300",
+                    )}
+                  >
+                    {displayValue}
+                  </span>
+
+                  <div className="absolute top-2 right-2 text-xs font-bold text-[hsl(30,40%,40%)] bg-[hsl(45,50%,85%)] px-2 py-0.5 rounded border border-[hsl(30,40%,50%)]">
+                    d{diceType}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {diceState === "result" && result !== null && (
               <div className="text-center space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                {modifier !== 0 && (
+                {(modifier !== 0 || bonus !== 0) && (
                   <div className="space-y-1">
                     <p className="text-base text-[hsl(35,40%,45%)]">
-                      <span className="font-bold text-[hsl(30,40%,15%)] text-xl">{result}</span>
-                      <span className="mx-2 text-[hsl(35,40%,50%)]">
-                        {modifier > 0 ? "+" : ""}
+                      {advantage && (
+                        <>
+                          <span className="font-bold text-[hsl(30,40%,15%)] text-xl">
+                            [{displayValue}, {secondaryValue}] → {Math.max(displayValue, secondaryValue)}
+                          </span>
+                          <span className="mx-2 text-[hsl(35,40%,50%)]">+</span>
+                        </>
+                      )}
+                      {!advantage && (
+                        <>
+                          <span className="font-bold text-[hsl(30,40%,15%)] text-xl">{baseRoll}</span>
+                          <span className="mx-2 text-[hsl(35,40%,50%)]">+</span>
+                        </>
+                      )}
+                      <span className="mx-1 text-[hsl(35,40%,50%)]">
                         {modifier}
                       </span>
+                      {bonus > 0 && (
+                        <>
+                          <span className="mx-1 text-[hsl(35,40%,50%)]">+</span>
+                          <span className="mx-1 text-[hsl(35,40%,50%)]">{bonus}</span>
+                        </>
+                      )}
                       <span className="mx-2 text-[hsl(35,40%,50%)]">=</span>
                       <span className="font-bold text-[hsl(30,40%,15%)] text-2xl">{totalResult}</span>
                     </p>

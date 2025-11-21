@@ -15,6 +15,7 @@ import { VALID_ITEM_KEYWORDS } from "@/lib/rules"
 import type { MerchantItem, InventoryItem } from "@/lib/types"
 import { toast } from "sonner"
 import { useGameStore } from "@/lib/game-state"
+import { generateUUID } from "@/lib/utils"
 
 interface MerchantModalProps {
   isOpen: boolean
@@ -57,7 +58,7 @@ function generateMerchantItem(): MerchantItem {
   }
 
   return {
-    id: `merchant-${Date.now()}-${Math.random()}`,
+    id: `merchant-${generateUUID()}`,
     name,
     description: `A ${rarity} ${randomKeyword} available for purchase.`,
     type,
