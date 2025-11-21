@@ -102,6 +102,11 @@ export function useItem(
 }
 
 /**
+ * Maximum number of accessories that can be equipped at once.
+ */
+export const MAX_EQUIPPED_ACCESSORIES = 2
+
+/**
  * Equips or unequips an item on the character.
  *
  * This is the NEW NON-DESTRUCTIVE implementation that prevents "Stat Drift".
@@ -109,27 +114,73 @@ export function useItem(
  * 1. Toggle the equipped boolean in inventory
  * 2. Recalculate ALL derived stats from baseStats
  *
+ * For accessories:
+ * - Maximum of 2 can be equipped at once
+ * - If equipping a 3rd accessory, the oldest equipped one is auto-unequipped
+ *
  * @param item - The item to equip/unequip
  * @param character - The character
  * @returns Updated character with new inventory and recalculated stats
  */
 export function equipItem(item: InventoryItem, character: Character): Character {
-  if (item.type !== "weapon" && item.type !== "armor") {
+  // Only allow equipping weapons, armor, and accessories
+  if (item.type !== "weapon" && item.type !== "armor" && item.type !== "accessory") {
     return character
   }
 
-  // Unequip other items of same type and toggle the target item
-  const updatedInventory = character.inventory.map((invItem) => {
-    if (invItem.type === item.type && invItem.id !== item.id) {
-      // Unequip other items of same type (only one weapon, one armor at a time)
-      return { ...invItem, equipped: false }
+  let updatedInventory = [...character.inventory]
+
+  if (item.type === "accessory") {
+    // Handle accessory equipping (max 2 slots)
+    const isCurrentlyEquipped = item.equipped
+
+    if (isCurrentlyEquipped) {
+      // Unequipping - just toggle off
+      updatedInventory = updatedInventory.map((invItem) => {
+        if (invItem.id === item.id) {
+          return { ...invItem, equipped: false }
+        }
+        return invItem
+      })
+    } else {
+      // Equipping - check if we need to unequip the oldest
+      const equippedAccessories = updatedInventory.filter(
+        (i) => i.type === "accessory" && i.equipped && i.id !== item.id
+      )
+
+      if (equippedAccessories.length >= MAX_EQUIPPED_ACCESSORIES) {
+        // Unequip the first (oldest) equipped accessory
+        const oldestAccessoryId = equippedAccessories[0].id
+        updatedInventory = updatedInventory.map((invItem) => {
+          if (invItem.id === oldestAccessoryId) {
+            return { ...invItem, equipped: false }
+          }
+          return invItem
+        })
+      }
+
+      // Now equip the new accessory
+      updatedInventory = updatedInventory.map((invItem) => {
+        if (invItem.id === item.id) {
+          return { ...invItem, equipped: true }
+        }
+        return invItem
+      })
     }
-    if (invItem.id === item.id) {
-      // Toggle the equipped status of the target item
-      return { ...invItem, equipped: !item.equipped }
-    }
-    return invItem
-  })
+  } else {
+    // Handle weapon/armor (only one of each type at a time)
+    updatedInventory = updatedInventory.map((invItem) => {
+      if (invItem.type === item.type && invItem.id !== item.id) {
+        // Unequip other items of same type (only one weapon, one armor at a time)
+        return { ...invItem, equipped: false }
+      }
+      if (invItem.id === item.id) {
+        // Toggle the equipped status of the target item
+        return { ...invItem, equipped: !item.equipped }
+      }
+      return invItem
+    })
+  }
 
   // CRITICAL: Recalculate derived stats from baseStats (NO manual math!)
   // This prevents stat drift by always calculating from the source of truth
@@ -525,19 +576,26 @@ export { validateItemName, suggestItemNameWithKeyword }
  * Generates stat bonuses for an item based on its type and rarity.
  *
  * TICKET 10.1: The Item Stat Generator
+ * TICKET 18.1: Extended for Accessories
  *
  * Logic:
  * - Determines primary stat based on item type (weapon->valor, armor->endurance, etc.)
  * - Rolls a value between min/max from ITEM_STAT_RANGES based on rarity
  * - Legendary items also get a bonus +1 to a random secondary stat
  *
- * @param type - The item type (weapon, armor, staff, etc.)
+ * Accessory Mappings:
+ * - Ring: wisdom, lore, or craft
+ * - Amulet: fellowship, wisdom, or endurance
+ * - Cloak: craft, endurance, or valor
+ *
+ * @param type - The item type (weapon, armor, staff, accessory, ring, amulet, cloak, etc.)
  * @param rarity - The item rarity (common, rare, legendary, artifact)
  * @returns Stat bonuses for the item
  *
  * @example
  * generateItemStats('weapon', 'rare') // { valor: 2 }
  * generateItemStats('armor', 'legendary') // { endurance: 3, valor: 1 }
+ * generateItemStats('ring', 'common') // { wisdom: 1 }
  */
 export function generateItemStats(type: string, rarity: string): Partial<CharacterStats> {
   // Get stat range from rarity (default to common if not found)
@@ -547,14 +605,37 @@ export function generateItemStats(type: string, rarity: string): Partial<Charact
   let primaryStat: keyof CharacterStats = "valor" // default fallback
   const typeLower = type.toLowerCase()
 
+  // Weapons
   if (typeLower.includes("weapon") || typeLower.includes("sword") || typeLower.includes("axe") || typeLower.includes("mace") || typeLower.includes("hammer")) {
     primaryStat = "valor"
-  } else if (typeLower.includes("armor") || typeLower.includes("shield") || typeLower.includes("helmet") || typeLower.includes("chainmail")) {
+  }
+  // Armor
+  else if (typeLower.includes("armor") || typeLower.includes("shield") || typeLower.includes("helmet") || typeLower.includes("chainmail")) {
     primaryStat = "endurance"
-  } else if (typeLower.includes("staff") || typeLower.includes("wand") || typeLower.includes("scroll") || typeLower.includes("book")) {
+  }
+  // Magical items (staff, wand, etc.)
+  else if (typeLower.includes("staff") || typeLower.includes("wand") || typeLower.includes("scroll") || typeLower.includes("book")) {
     primaryStat = "lore"
-  } else if (typeLower.includes("bow") || typeLower.includes("dagger") || typeLower.includes("crossbow")) {
+  }
+  // Ranged/Precision weapons
+  else if (typeLower.includes("bow") || typeLower.includes("dagger") || typeLower.includes("crossbow")) {
     primaryStat = "craft"
+  }
+  // TICKET 18.1: Accessory Types
+  // Ring - wisdom/lore/craft
+  else if (typeLower.includes("ring")) {
+    const ringStats: Array<keyof CharacterStats> = ["wisdom", "lore", "craft"]
+    primaryStat = ringStats[Math.floor(Math.random() * ringStats.length)]
+  }
+  // Amulet/Necklace/Pendant - fellowship/wisdom/endurance
+  else if (typeLower.includes("amulet") || typeLower.includes("necklace") || typeLower.includes("pendant")) {
+    const amuletStats: Array<keyof CharacterStats> = ["fellowship", "wisdom", "endurance"]
+    primaryStat = amuletStats[Math.floor(Math.random() * amuletStats.length)]
+  }
+  // Cloak/Cape/Brooch - craft/endurance/valor
+  else if (typeLower.includes("cloak") || typeLower.includes("cape") || typeLower.includes("brooch")) {
+    const cloakStats: Array<keyof CharacterStats> = ["craft", "endurance", "valor"]
+    primaryStat = cloakStats[Math.floor(Math.random() * cloakStats.length)]
   }
 
   // Roll value between min and max

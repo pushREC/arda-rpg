@@ -42,7 +42,7 @@ export type InventoryItem = {
   id: string
   name: string
   description: string
-  type: "weapon" | "armor" | "potion" | "quest" | "treasure"
+  type: "weapon" | "armor" | "potion" | "quest" | "treasure" | "accessory"
   quantity: number
   value: number
   equipped?: boolean

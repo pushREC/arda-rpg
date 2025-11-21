@@ -42,7 +42,7 @@ import { useSound } from "@/components/sound-provider"
 import { generateUUID } from "@/lib/utils"
 import { modalQueue } from "@/lib/modal-queue"
 import { NotificationManager, useNotifications } from "@/components/notification-manager"
-import { useGameStore } from "@/lib/game-state"
+import { useGame } from "@/lib/game-context"
 
 function GamePageContent() {
   const router = useRouter()
@@ -165,24 +165,24 @@ function GamePageContent() {
 
   const handleSellItem = React.useCallback(
     (item: InventoryItem, sellValue: number) => {
-      // CRITICAL: Update Zustand store first (persistent source of truth)
-      const store = useGameStore.getState()
-      store.removeInventoryItem(item.id)
-      store.addGold(sellValue)
-
-      // Then sync local state from Zustand to ensure consistency
-      const updatedCharacter = useGameStore.getState().character
-      if (updatedCharacter) {
-        setCharacter(updatedCharacter)
-        // Zustand persist middleware handles localStorage automatically
+      // [TICKET 18.5] Migrated from Zustand to React Context
+      // Update local state directly and persist to localStorage
+      const updatedInventory = character.inventory.filter((i: any) => i.id !== item.id)
+      const updatedCharacter = {
+        ...character,
+        inventory: updatedInventory,
+        gold: (character.gold || 0) + sellValue,
       }
+
+      setCharacter(updatedCharacter)
+      localStorage.setItem("character", JSON.stringify(updatedCharacter))
 
       addNotification("gold", sellValue)
       toast.success(`Sold ${item.name}`, {
         description: `+${sellValue} gold`,
       })
     },
-    [addNotification],
+    [character, addNotification],
   )
 
   React.useEffect(() => {
@@ -266,6 +266,7 @@ function GamePageContent() {
   }, [storyEntries, currentHealth, currentXP, currentLevel])
 
   // [DEV C - Ticket 5.2] Death Watcher: Enforce permadeath when health hits 0
+  // [TICKET 18.5] Migrated from Zustand to React Context
   React.useEffect(() => {
     if (currentHealth <= 0 && character && !character.isDead) {
       console.log("[DEV C] Player died. Enforcing permadeath.")
@@ -281,10 +282,6 @@ function GamePageContent() {
 
       // Force immediate persist to localStorage
       localStorage.setItem("character", JSON.stringify(deadChar))
-
-      // Update Zustand store
-      useGameStore.getState().setCharacter(deadChar)
-      useGameStore.getState().updateLastSaved()
     }
   }, [currentHealth, character])
 
@@ -843,6 +840,34 @@ What will you do?`
     try {
       setRetryCount(0)
 
+      // [TICKET 18.4] Process effect expiration at the START of each turn
+      // This ensures buffs expire correctly before the new turn is processed
+      let workingCharacter = { ...character }
+      let workingEffects = [...activeEffects]
+
+      if (workingEffects.length > 0) {
+        const { character: charAfterEffects, expiredEffects } = processTurnEffects(workingCharacter, workingEffects)
+
+        if (expiredEffects.length > 0) {
+          toast.info("Effects expired", {
+            description: expiredEffects.join(", "),
+          })
+        }
+
+        // Update working character and effects for this turn
+        workingCharacter = charAfterEffects
+
+        // Filter out expired effects (those with remainingTurns <= 0 after decrement)
+        workingEffects = workingEffects
+          .map((effect) => ({ ...effect, remainingTurns: effect.remainingTurns - 1 }))
+          .filter((effect) => effect.remainingTurns > 0)
+
+        // Update state immediately so the API call uses current stats
+        setCharacter(workingCharacter)
+        setActiveEffects(workingEffects)
+        localStorage.setItem("character", JSON.stringify(workingCharacter))
+      }
+
       const response = await fetch("/api/process-turn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1038,23 +1063,8 @@ What will you do?`
       addStoryEntry("narration", narrative)
       setCurrentChoices(choices)
 
-      // [SPRINT 11 - TICKET 11.4] Wire Effect Expiration
-      // Process Effects (Decrement duration)
-      if (activeEffects.length > 0) {
-        const { character: charAfterEffects, expiredEffects } = processTurnEffects(updatedCharacter, activeEffects)
-
-        if (expiredEffects.length > 0) {
-          toast.info("Effects expired", {
-            description: expiredEffects.join(", "),
-          })
-          // Update with the version that has effects applied
-          setCharacter(charAfterEffects)
-          localStorage.setItem("character", JSON.stringify(charAfterEffects))
-
-          // Update active effects state by removing expired ones
-          setActiveEffects((prev) => prev.filter((effect) => effect.remainingTurns > 0))
-        }
-      }
+      // [TICKET 18.4] Effect processing moved to START of turn (see above)
+      // Effects are now processed before the API call, not after
 
       setIsLoading(false)
     } catch (error) {
@@ -1329,20 +1339,24 @@ What will you do?`
         <LevelUpModal
           isOpen={showLevelUp}
           newLevel={currentQueuedModal.data.newLevel || currentLevel}
-          onClose={() => {
-            // [SPRINT 11 - TICKET 11.3] Wire Level Up Application
-            // 1. Get the stat increases from the queued modal data
-            const increases = currentQueuedModal?.data?.statIncreases
+          onClose={(chosenStat) => {
+            // [TICKET 18.2] Interactive Level-Up Core
+            // The player now chooses which stat to increase
+            if (chosenStat) {
+              // Create stat increases object from player's choice
+              const increases = { [chosenStat]: 1 }
 
-            if (increases) {
-              // 2. Apply the stats permanently
+              // Apply the stats permanently using applyLevelUp
               const leveledChar = applyLevelUp(character, increases)
 
-              // 3. Update State & Persistence
+              // Update State & Persistence
               setCharacter(leveledChar)
               localStorage.setItem("character", JSON.stringify(leveledChar))
 
-              toast.success("Level Up Applied! Stats increased.")
+              // Update current health to match new maxHealth after level up
+              setCurrentHealth(leveledChar.health)
+
+              toast.success(`Level Up! +1 ${chosenStat.charAt(0).toUpperCase() + chosenStat.slice(1)}`)
             }
 
             setShowLevelUp(false)

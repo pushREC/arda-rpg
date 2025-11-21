@@ -106,24 +106,40 @@ export default function CharacterCreationPage() {
         const itemLower = item.toLowerCase()
         let type: InventoryItem["type"] = "quest"
 
+        // TICKET 18.1: Detect accessories (ring, amulet, cloak)
         if (
+          itemLower.includes("ring") ||
+          itemLower.includes("amulet") ||
+          itemLower.includes("necklace") ||
+          itemLower.includes("pendant") ||
+          itemLower.includes("cloak") ||
+          itemLower.includes("cape") ||
+          itemLower.includes("brooch")
+        ) {
+          type = "accessory"
+        } else if (
           itemLower.includes("sword") ||
           itemLower.includes("bow") ||
           itemLower.includes("knife") ||
-          itemLower.includes("staff")
+          itemLower.includes("staff") ||
+          itemLower.includes("dagger") ||
+          itemLower.includes("axe") ||
+          itemLower.includes("mace") ||
+          itemLower.includes("hammer")
         ) {
           type = "weapon"
         } else if (
           itemLower.includes("armor") ||
           itemLower.includes("shield") ||
-          itemLower.includes("chainmail")
+          itemLower.includes("chainmail") ||
+          itemLower.includes("helmet")
         ) {
           type = "armor"
         }
 
-        // Generate stats for weapons and armor (SPRINT 10.1)
+        // TICKET 18.1: Generate stats for all functional gear (weapons, armor, accessories)
         const stats =
-          type === "weapon" || type === "armor"
+          type === "weapon" || type === "armor" || type === "accessory"
             ? generateItemStats(itemLower, "common")
             : undefined
 
