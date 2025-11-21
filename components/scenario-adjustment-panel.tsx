@@ -13,7 +13,29 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Settings2 } from "lucide-react"
+import {
+  Settings2,
+  Cloud,
+  Sun,
+  HelpCircle,
+  Zap,
+  Heart,
+  AlertTriangle,
+  Sparkles,
+  CloudRain,
+  type LucideIcon,
+} from "lucide-react"
+
+const iconMap: Record<string, LucideIcon> = {
+  Cloud,
+  Sun,
+  HelpCircle,
+  Zap,
+  Heart,
+  AlertTriangle,
+  Sparkles,
+  CloudRain,
+}
 import { cn } from "@/lib/utils"
 import type { Scenario, CustomScenarioConfig, ScenarioTone } from "@/lib/types"
 import { TONE_OPTIONS } from "@/lib/scenario-config"
@@ -85,7 +107,7 @@ export function ScenarioAdjustmentPanel({ scenario, onAdjust, currentTurn, isInC
               <Label className="text-base font-semibold">Tones</Label>
               <div className="flex flex-wrap gap-2">
                 {TONE_OPTIONS.map((tone) => {
-                  const Icon = tone.icon
+                  const Icon = iconMap[tone.icon] || Sparkles
                   const isSelected = currentTones.includes(tone.id)
 
                   return (

@@ -180,26 +180,26 @@ export default function CustomWizardPage() {
     }
   }
 
-  const canProceedStep1 = () => {
-    return (region || customRegion.trim()) && (location || customLocation.trim())
+  const canProceedStep1 = (): boolean => {
+    return !!(region || customRegion.trim()) && !!(location || customLocation.trim())
   }
 
-  const canProceedStep2 = () => {
-    return (questHook || customQuestHook.trim()) && urgency && stakes
+  const canProceedStep2 = (): boolean => {
+    return !!(questHook || customQuestHook.trim()) && !!urgency && !!stakes
   }
 
-  const canProceedStep3 = () => {
+  const canProceedStep3 = (): boolean => {
     return tones.length > 0 && tones.length <= 2
   }
 
-  const canProceedStep4 = () => {
+  const canProceedStep4 = (): boolean => {
     if (!companionPreference) return false
     if (companionPreference === "solo") return true
-    return companionType || customCompanionType.trim()
+    return !!(companionType || customCompanionType.trim())
   }
 
-  const canProceedStep5 = () => {
-    return uniqueElement || customUniqueElement.trim()
+  const canProceedStep5 = (): boolean => {
+    return !!(uniqueElement || customUniqueElement.trim())
   }
 
   const canProceedCurrentStep = () => {

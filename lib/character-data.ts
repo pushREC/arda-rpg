@@ -84,7 +84,7 @@ export function calculateFinalStats(
 
   // Apply race bonuses
   const raceData = RACES[race]
-  if (raceData.bonuses.flexChoice && humanBonusStat) {
+  if ("flexChoice" in raceData.bonuses && humanBonusStat && "bonusAmount" in raceData) {
     finalStats[humanBonusStat] += raceData.bonusAmount
   } else {
     Object.entries(raceData.bonuses).forEach(([stat, value]) => {

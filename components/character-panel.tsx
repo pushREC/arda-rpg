@@ -401,16 +401,16 @@ export function CharacterPanel({
             setSelectedItem(null)
           }}
           item={selectedItem}
-          onUse={(item) => {
-            console.log("[v0] Using item:", item)
+          onUse={() => {
+            console.log("[v0] Using item:", selectedItem)
             setShowItemDetail(false)
           }}
-          onEquip={(item) => {
-            console.log("[v0] Equipping item:", item)
+          onEquip={() => {
+            console.log("[v0] Equipping item:", selectedItem)
             setShowItemDetail(false)
           }}
-          onDrop={(item) => {
-            console.log("[v0] Dropping item:", item)
+          onDrop={() => {
+            console.log("[v0] Dropping item:", selectedItem)
             setShowItemDetail(false)
           }}
         />
