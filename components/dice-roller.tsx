@@ -4,6 +4,7 @@ import * as React from "react"
 import { Button } from "@/components/ui/button"
 import { X, Sparkles, Zap, Dices, RotateCcw, Heart } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useSound } from "@/components/sound-provider"
 
 interface DiceRollerProps {
   onRoll: (result: number) => void
@@ -34,6 +35,7 @@ export function DiceRoller({
   maxHealth,
   statValue,
 }: DiceRollerProps) {
+  const { playSound } = useSound()
   const [diceState, setDiceState] = React.useState<DiceState>("ready")
   const [result, setResult] = React.useState<number | null>(null)
   const [displayValue, setDisplayValue] = React.useState<number>(1)
@@ -44,6 +46,9 @@ export function DiceRoller({
     setDiceState("rolling")
     setResult(null)
     setParticles([])
+
+    // Play dice roll sound when animation starts
+    playSound("dice_roll")
 
     // Pre-determine the final results
     const roll1 = Math.floor(Math.random() * diceType) + 1
@@ -108,6 +113,12 @@ export function DiceRoller({
 
   const handleConfirm = () => {
     if (result !== null) {
+      // Play success or failure sound based on the roll result
+      if (isCriticalSuccess || (!isCriticalFailure && baseRoll !== null && baseRoll >= (diceType / 2))) {
+        playSound("success")
+      } else {
+        playSound("failure")
+      }
       onRoll(result)
     }
   }

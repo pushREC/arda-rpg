@@ -6,6 +6,7 @@ import { Heart, Volume2, VolumeX, Menu, Trophy, Save, Tent } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CombatOverlay } from "@/components/combat-overlay"
 import type { CombatState } from "@/lib/types"
+import { useSound } from "@/components/sound-provider"
 
 interface GameShellProps {
   children?: React.ReactNode
@@ -19,6 +20,7 @@ interface GameShellProps {
   onViewAchievements?: () => void
   onSaveGame?: () => void
   onRest?: () => void
+  disableSave?: boolean // [TICKET 13.4] Anti-cheat: disable saving during combat
 }
 
 export function GameShell({
@@ -33,8 +35,9 @@ export function GameShell({
   onViewAchievements,
   onSaveGame,
   onRest,
+  disableSave = false,
 }: GameShellProps) {
-  const [isMuted, setIsMuted] = React.useState(false)
+  const { isMuted, toggleMute } = useSound()
   const [showCharacterPanel, setShowCharacterPanel] = React.useState(false)
   const [showAchievements, setShowAchievements] = React.useState(false)
 
@@ -103,8 +106,9 @@ export function GameShell({
                 variant="ghost"
                 size="icon"
                 onClick={onSaveGame}
-                title="Save Game"
-                className="hover:bg-[hsl(35,40%,85%)] hidden sm:flex"
+                title={disableSave ? "Cannot save during combat" : "Save Game"}
+                disabled={disableSave}
+                className="hover:bg-[hsl(35,40%,85%)] hidden sm:flex disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Save className="h-5 w-5 text-[hsl(35,60%,40%)]" />
               </Button>
@@ -122,7 +126,7 @@ export function GameShell({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setIsMuted(!isMuted)}
+                onClick={toggleMute}
                 title="Toggle Sound"
                 className="hover:bg-[hsl(35,40%,85%)] hidden md:flex flex-shrink-0"
               >

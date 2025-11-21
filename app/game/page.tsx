@@ -37,6 +37,8 @@ import {
   processTurnEffects,
 } from "@/lib/game-logic"
 import { getStatModifier, calculateDerivedStats, shouldRollAdvantage, getCompanionBonus, getActiveEffectBonus } from "@/lib/rules"
+import { performStatCheck } from "@/lib/dice"
+import { useSound } from "@/components/sound-provider"
 import { generateUUID } from "@/lib/utils"
 import { modalQueue } from "@/lib/modal-queue"
 import { NotificationManager, useNotifications } from "@/components/notification-manager"
@@ -45,6 +47,7 @@ import { useGameStore } from "@/lib/game-state"
 function GamePageContent() {
   const router = useRouter()
   const { addNotification } = useNotifications()
+  const { playSound } = useSound()
 
   const [character, setCharacter] = React.useState<any>(null)
   const [scenario, setScenario] = React.useState<any>(null)
@@ -106,6 +109,8 @@ function GamePageContent() {
       const result = applyItem(item, character, currentHealth)
 
       if (result.success) {
+        // [TICKET 13.2] Play potion sound on item use
+        playSound("potion")
         toast.success(result.message)
 
         if (result.healthChange) {
@@ -125,11 +130,14 @@ function GamePageContent() {
         toast.error(result.message)
       }
     },
-    [character, currentHealth, addNotification],
+    [character, currentHealth, addNotification, playSound],
   )
 
   const handleEquipItem = React.useCallback(
     (item: InventoryItem) => {
+      // [TICKET 13.2] Play equip sound
+      playSound("equip")
+
       const updatedCharacter = equipItem(item, character)
       setCharacter(updatedCharacter)
       localStorage.setItem("character", JSON.stringify(updatedCharacter))
@@ -138,7 +146,7 @@ function GamePageContent() {
         description: item.name,
       })
     },
-    [character],
+    [character, playSound],
   )
 
   const handleDropItem = React.useCallback(
@@ -361,8 +369,32 @@ function GamePageContent() {
       return
     }
 
+    // [TICKET 13.4] Rest Mechanics with Dice Roll
+    // Calculate DC: Base 10 + (combatFrequency * 2)
+    const combatFrequency = scenario?.customConfig?.combatFrequency || 3
+    const dc = 10 + (combatFrequency * 2)
+
+    // Get the endurance stat for the survival check
+    const enduranceStat = currentStats?.endurance || character?.stats?.endurance || 10
+
+    // Perform the survival check
+    const result = performStatCheck("endurance", enduranceStat, dc)
+
+    // Show dice roll feedback
+    if (result.success) {
+      toast.success(`Rest Check: Success! (Roll ${result.roll} + ${result.modifier} = ${result.total} vs DC ${dc})`)
+    } else {
+      toast.error(`Rest Check: Failed! (Roll ${result.roll} + ${result.modifier} = ${result.total} vs DC ${dc})`)
+    }
+
     setIsLoading(true)
-    addStoryEntry("action", "You decide to set up camp and rest for a while.")
+
+    // Different story text based on success/fail
+    const restText = result.success
+      ? "I establish a secure camp and rest."
+      : "I try to rest, but my camp is exposed and noisy."
+
+    addStoryEntry("action", `You decide to set up camp and rest for a while. (DC ${dc}: ${result.success ? "Success" : "Failed"})`)
 
     try {
       const response = await fetch("/api/process-turn", {
@@ -372,9 +404,16 @@ function GamePageContent() {
           character,
           scenario,
           storyHistory: storyEntries,
-          playerChoice: "I decide to set up camp and rest for a while.",
+          playerChoice: restText,
           actionType: "survival",
           customConfig: scenario.customConfig,
+          // Pass the result to the AI so it knows how to respond
+          restCheckResult: {
+            success: result.success,
+            roll: result.roll,
+            total: result.total,
+            dc: dc,
+          },
         }),
       })
 
@@ -420,7 +459,7 @@ function GamePageContent() {
       })
       setIsLoading(false)
     }
-  }, [character, scenario, storyEntries, isInCombat, currentHealth, addNotification])
+  }, [character, scenario, storyEntries, isInCombat, currentHealth, currentStats, addNotification])
 
   const startGame = async (charData: any, scenarioData: any) => {
     setIsLoading(true)
@@ -839,6 +878,9 @@ What will you do?`
 
       // Check if API forced a combat start (Sprint 8 logic)
       if (data.startCombat) {
+        // [TICKET 13.2] Play combat start sound
+        playSound("combat_start")
+
         const newCombatState = {
           isActive: true,
           enemyId: data.startCombat.enemyId,
@@ -1162,6 +1204,7 @@ What will you do?`
         onViewAchievements={() => setShowAchievements(true)}
         onSaveGame={() => setShowSaveLoad(true)}
         onRest={handleRest}
+        disableSave={character?.combat?.isActive}
       >
         <div className="flex flex-1 overflow-hidden flex-col lg:flex-row">
           <div className="flex-1 flex flex-col overflow-hidden">

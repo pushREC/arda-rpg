@@ -1,8 +1,10 @@
 "use client"
+import * as React from "react"
 import { Trophy, Home, RotateCcw, Sparkles, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import type { StoryEntry } from "@/lib/types"
+import { useSound } from "@/components/sound-provider"
 
 interface VictoryScreenProps {
   isOpen: boolean
@@ -20,6 +22,14 @@ interface VictoryScreenProps {
 
 export function VictoryScreen({ isOpen, questName = "The Quest", finalStats, storyEntries = [], characterName = "Hero" }: VictoryScreenProps) {
   const router = useRouter()
+  const { playSound } = useSound()
+
+  // Play victory sound when modal mounts
+  React.useEffect(() => {
+    if (isOpen) {
+      playSound("victory")
+    }
+  }, [isOpen, playSound])
 
   if (!isOpen) return null
 

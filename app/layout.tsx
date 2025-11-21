@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Cinzel, Lora } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "sonner"
+import { SoundProvider } from "@/components/sound-provider"
 import "./globals.css"
 
 const cinzel = Cinzel({
@@ -46,7 +47,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${cinzel.className}`}>
       <body className={`${lora.className} antialiased`}>
-        {children}
+        <SoundProvider>
+          {children}
+        </SoundProvider>
         <Toaster />
         <Analytics />
       </body>

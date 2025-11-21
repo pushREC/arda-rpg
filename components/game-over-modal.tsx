@@ -1,7 +1,8 @@
 "use client"
-import { Skull, Home, RotateCcw } from "lucide-react"
+import * as React from "react"
+import { Skull, Home, UserPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useRouter } from "next/navigation"
+import { useSound } from "@/components/sound-provider"
 
 interface GameOverModalProps {
   isOpen: boolean
@@ -15,16 +16,34 @@ interface GameOverModalProps {
 }
 
 export function GameOverModal({ isOpen, cause = "Your health reached zero", finalStats }: GameOverModalProps) {
-  const router = useRouter()
+  const { playSound } = useSound()
+
+  // Play game over sound when modal mounts
+  React.useEffect(() => {
+    if (isOpen) {
+      playSound("game_over")
+    }
+  }, [isOpen, playSound])
 
   if (!isOpen) return null
 
-  const handleRetry = () => {
-    router.push("/scenario-selection")
+  // [TICKET 13.3] Death Loop Kill Switch - Properly reset character and redirect
+  const handleNewHero = () => {
+    // 1. Nuke the dead character data
+    localStorage.removeItem("character")
+
+    // 2. Clear scenario to prevent state mismatch
+    localStorage.removeItem("scenario")
+
+    // 3. Force hard redirect to character creation
+    window.location.href = "/character-creation"
   }
 
   const handleHome = () => {
-    router.push("/")
+    // Also clear dead character data when going home
+    localStorage.removeItem("character")
+    localStorage.removeItem("scenario")
+    window.location.href = "/"
   }
 
   return (
@@ -63,11 +82,11 @@ export function GameOverModal({ isOpen, cause = "Your health reached zero", fina
           {/* Actions */}
           <div className="space-y-3 pt-4">
             <Button
-              onClick={handleRetry}
+              onClick={handleNewHero}
               className="w-full h-12 bg-[hsl(30,50%,40%)] hover:bg-[hsl(30,50%,35%)] text-white border-2 border-[hsl(30,50%,30%)] shadow-[2px_2px_0px_0px_hsl(30,50%,30%)] hover:shadow-[4px_4px_0px_0px_hsl(30,50%,30%)] hover:-translate-y-0.5 transition-all"
             >
-              <RotateCcw className="h-5 w-5 mr-2" />
-              Try Again
+              <UserPlus className="h-5 w-5 mr-2" />
+              New Hero
             </Button>
             <Button
               onClick={handleHome}
