@@ -25,7 +25,8 @@ export type Character = {
   race: Race
   background: Background
   raceAbility: string
-  stats: CharacterStats
+  baseStats: CharacterStats // Base stats without any equipment or effects
+  stats: CharacterStats // Derived stats (base + equipment + effects)
   level: number
   experience: number
   health: number

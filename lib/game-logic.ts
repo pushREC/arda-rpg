@@ -4,6 +4,7 @@ import {
   getXPForNextLevel as getXPFromRules,
   validateItemName,
   suggestItemNameWithKeyword,
+  calculateDerivedStats,
 } from "./rules"
 
 const SAVE_VERSION = "1.0.0"
@@ -29,8 +30,16 @@ export const DEFAULT_COMBAT_STATE: CombatState = {
  * @returns Fully migrated Character object
  */
 export function migrateCharacter(char: any): Character {
+  // Handle baseStats migration - CRITICAL for backward compatibility
+  if (!char.baseStats) {
+    // Assume current stats are base stats for old saves
+    // This prevents data loss from pre-Sprint 6 saves
+    char.baseStats = { ...char.stats }
+  }
+
   return {
     ...char,
+    baseStats: char.baseStats,
     combat: char.combat || { ...DEFAULT_COMBAT_STATE },
     isDead: char.isDead ?? false,
   }
@@ -89,39 +98,48 @@ export function useItem(
   return { success: false, message: "Item has no effect" }
 }
 
+/**
+ * Equips or unequips an item on the character.
+ *
+ * This is the NEW NON-DESTRUCTIVE implementation that prevents "Stat Drift".
+ * Instead of manually adding/subtracting stat values, we:
+ * 1. Toggle the equipped boolean in inventory
+ * 2. Recalculate ALL derived stats from baseStats
+ *
+ * @param item - The item to equip/unequip
+ * @param character - The character
+ * @returns Updated character with new inventory and recalculated stats
+ */
 export function equipItem(item: InventoryItem, character: Character): Character {
   if (item.type !== "weapon" && item.type !== "armor") {
     return character
   }
 
-  // Unequip other items of same type
+  // Unequip other items of same type and toggle the target item
   const updatedInventory = character.inventory.map((invItem) => {
     if (invItem.type === item.type && invItem.id !== item.id) {
+      // Unequip other items of same type (only one weapon, one armor at a time)
       return { ...invItem, equipped: false }
     }
     if (invItem.id === item.id) {
+      // Toggle the equipped status of the target item
       return { ...invItem, equipped: !item.equipped }
     }
     return invItem
   })
 
-  // Calculate stats with equipment bonuses
-  const equippedItems = updatedInventory.filter((i) => i.equipped && i.stats)
-  const baseStats = { ...character.stats }
-  const modifiedStats = { ...baseStats }
-
-  equippedItems.forEach((equippedItem) => {
-    if (equippedItem.stats) {
-      Object.entries(equippedItem.stats).forEach(([stat, value]) => {
-        modifiedStats[stat as keyof CharacterStats] += value as number
-      })
-    }
-  })
+  // CRITICAL: Recalculate derived stats from baseStats (NO manual math!)
+  // This prevents stat drift by always calculating from the source of truth
+  const derivedStats = calculateDerivedStats(
+    character.baseStats,
+    updatedInventory,
+    [] // TODO: Pass active effects from game state when available
+  )
 
   return {
     ...character,
     inventory: updatedInventory,
-    stats: modifiedStats,
+    stats: derivedStats,
   }
 }
 

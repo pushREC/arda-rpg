@@ -93,7 +93,8 @@ export default function CharacterCreationPage() {
       race: selectedRace,
       background: selectedBackground,
       raceAbility: raceData.ability,
-      stats: finalStats,
+      baseStats: finalStats, // Base stats (naked, no equipment)
+      stats: finalStats, // Initially same as baseStats (no equipment yet)
       level: 1,
       experience: 0,
       health: startingHP,
@@ -108,6 +109,15 @@ export default function CharacterCreationPage() {
         value: 0,
       })),
       companions: [],
+      combat: {
+        isActive: false,
+        enemyId: null,
+        enemyName: null,
+        enemyHpCurrent: 0,
+        enemyHpMax: 0,
+        roundCount: 0,
+      },
+      isDead: false,
     }
 
     localStorage.setItem("character", JSON.stringify(character))
