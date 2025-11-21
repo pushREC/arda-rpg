@@ -218,7 +218,7 @@ export type GameState = {
   turnCount: number
 }
 
-export type ActionType = "combat" | "social" | "investigation" | "craft" | "narrative" | "stealth" | "survival" | "trade"
+export type ActionType = "combat" | "social" | "investigation" | "craft" | "narrative" | "stealth" | "survival" | "trade" | "death"
 
 export type StatType = "valor" | "wisdom" | "fellowship" | "craft" | "endurance" | "lore"
 
