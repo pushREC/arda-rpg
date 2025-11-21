@@ -22,6 +22,7 @@ import {
 import { InventoryItemCard } from "@/components/inventory-item"
 import { WizardProgress } from "@/components/wizard-progress"
 import { NavigationFooter } from "@/components/navigation-footer"
+import { generateItemStats } from "@/lib/game-logic"
 
 type Step = "name" | "race" | "background" | "stats" | "confirmation"
 
@@ -100,14 +101,42 @@ export default function CharacterCreationPage() {
       health: startingHP,
       maxHealth: startingHP,
       gold: backgroundData.startingGold,
-      inventory: backgroundData.equipment.map((item, idx) => ({
-        id: `item-${idx}`,
-        name: item,
-        description: `Starting equipment from ${backgroundData.name} background`,
-        type: "quest" as const,
-        quantity: 1,
-        value: 0,
-      })),
+      inventory: backgroundData.equipment.map((item, idx) => {
+        // Detect item type based on name keywords
+        const itemLower = item.toLowerCase()
+        let type: InventoryItem["type"] = "quest"
+
+        if (
+          itemLower.includes("sword") ||
+          itemLower.includes("bow") ||
+          itemLower.includes("knife") ||
+          itemLower.includes("staff")
+        ) {
+          type = "weapon"
+        } else if (
+          itemLower.includes("armor") ||
+          itemLower.includes("shield") ||
+          itemLower.includes("chainmail")
+        ) {
+          type = "armor"
+        }
+
+        // Generate stats for weapons and armor (SPRINT 10.1)
+        const stats =
+          type === "weapon" || type === "armor"
+            ? generateItemStats(itemLower, "common")
+            : undefined
+
+        return {
+          id: `item-${idx}`,
+          name: item,
+          description: `Starting equipment from ${backgroundData.name} background`,
+          type,
+          quantity: 1,
+          value: 0,
+          stats,
+        }
+      }),
       companions: [],
       combat: {
         isActive: false,

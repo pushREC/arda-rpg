@@ -454,6 +454,28 @@ export const TRADE_CONFIG = {
 } as const
 
 // ============================================================================
+// ITEM STAT GENERATION - Loot Scaling by Rarity
+// ============================================================================
+
+/**
+ * Stat bonus ranges for items by rarity tier.
+ *
+ * These ranges determine how many stat points an item provides.
+ * Higher rarity items grant better bonuses.
+ *
+ * - common: +1 to one stat
+ * - rare: +1 to +2 to one stat
+ * - legendary: +2 to +3 to one stat (+ bonus secondary stat)
+ * - artifact: +3 to +5 to one stat
+ */
+export const ITEM_STAT_RANGES = {
+  common: { min: 1, max: 1 },
+  rare: { min: 1, max: 2 },
+  legendary: { min: 2, max: 3 },
+  artifact: { min: 3, max: 5 },
+} as const
+
+// ============================================================================
 // COMPANION BONUSES - Fellowship Stat Modifiers
 // ============================================================================
 

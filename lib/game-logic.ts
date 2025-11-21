@@ -5,6 +5,8 @@ import {
   validateItemName,
   suggestItemNameWithKeyword,
   calculateDerivedStats,
+  calculateMaxHealth,
+  ITEM_STAT_RANGES,
 } from "./rules"
 import { generateUUID } from "./utils"
 
@@ -514,3 +516,220 @@ export function validateGameData(): { valid: boolean; character?: any; scenario?
  * Re-export item validation functions from lib/rules.ts for convenience.
  */
 export { validateItemName, suggestItemNameWithKeyword }
+
+// ============================================================================
+// SPRINT 10: SYSTEMS REALISM - Item Stats, Level Up, Effect Decay
+// ============================================================================
+
+/**
+ * Generates stat bonuses for an item based on its type and rarity.
+ *
+ * TICKET 10.1: The Item Stat Generator
+ *
+ * Logic:
+ * - Determines primary stat based on item type (weapon->valor, armor->endurance, etc.)
+ * - Rolls a value between min/max from ITEM_STAT_RANGES based on rarity
+ * - Legendary items also get a bonus +1 to a random secondary stat
+ *
+ * @param type - The item type (weapon, armor, staff, etc.)
+ * @param rarity - The item rarity (common, rare, legendary, artifact)
+ * @returns Stat bonuses for the item
+ *
+ * @example
+ * generateItemStats('weapon', 'rare') // { valor: 2 }
+ * generateItemStats('armor', 'legendary') // { endurance: 3, valor: 1 }
+ */
+export function generateItemStats(type: string, rarity: string): Partial<CharacterStats> {
+  // Get stat range from rarity (default to common if not found)
+  const range = ITEM_STAT_RANGES[rarity as keyof typeof ITEM_STAT_RANGES] || ITEM_STAT_RANGES.common
+
+  // Determine primary stat based on type
+  let primaryStat: keyof CharacterStats = "valor" // default fallback
+  const typeLower = type.toLowerCase()
+
+  if (typeLower.includes("weapon") || typeLower.includes("sword") || typeLower.includes("axe") || typeLower.includes("mace") || typeLower.includes("hammer")) {
+    primaryStat = "valor"
+  } else if (typeLower.includes("armor") || typeLower.includes("shield") || typeLower.includes("helmet") || typeLower.includes("chainmail")) {
+    primaryStat = "endurance"
+  } else if (typeLower.includes("staff") || typeLower.includes("wand") || typeLower.includes("scroll") || typeLower.includes("book")) {
+    primaryStat = "lore"
+  } else if (typeLower.includes("bow") || typeLower.includes("dagger") || typeLower.includes("crossbow")) {
+    primaryStat = "craft"
+  }
+
+  // Roll value between min and max
+  const primaryValue = Math.floor(Math.random() * (range.max - range.min + 1)) + range.min
+
+  const stats: Partial<CharacterStats> = {
+    [primaryStat]: primaryValue,
+  }
+
+  // Legendary items get a bonus secondary stat (+1)
+  if (rarity === "legendary") {
+    const secondaryStats: Array<keyof CharacterStats> = ["valor", "wisdom", "fellowship", "craft", "endurance", "lore"]
+    const availableStats = secondaryStats.filter(s => s !== primaryStat)
+    const secondaryStat = availableStats[Math.floor(Math.random() * availableStats.length)]
+    stats[secondaryStat] = 1
+  }
+
+  return stats
+}
+
+/**
+ * Applies level up stat increases to a character.
+ *
+ * TICKET 10.2: Level Up Application Logic
+ *
+ * Logic:
+ * - Adds stat increases to character.baseStats
+ * - Recalculates max health based on new endurance
+ * - Heals character by the health increase amount
+ * - Increments level by 1
+ * - Recalculates derived stats (stats = baseStats + equipment + effects)
+ *
+ * @param character - The character to level up
+ * @param statIncreases - The stat increases to apply (e.g., { valor: 1 })
+ * @returns Updated character with new level and stats
+ *
+ * @example
+ * applyLevelUp(char, { valor: 1, endurance: 1 }) // Level up with +1 valor, +1 endurance
+ */
+export function applyLevelUp(character: Character, statIncreases: Partial<CharacterStats>): Character {
+  // Clone character to avoid mutation
+  const updated = { ...character }
+
+  // Safety: If baseStats is missing, initialize it from stats (migration safety)
+  if (!updated.baseStats) {
+    updated.baseStats = { ...updated.stats }
+  }
+
+  // Calculate old max HP before stat changes
+  const oldMaxHp = calculateMaxHealth(updated.baseStats.endurance)
+
+  // Apply stat increases to baseStats
+  const newBaseStats: CharacterStats = { ...updated.baseStats }
+  Object.entries(statIncreases).forEach(([stat, value]) => {
+    if (value !== undefined) {
+      newBaseStats[stat as keyof CharacterStats] += value
+    }
+  })
+  updated.baseStats = newBaseStats
+
+  // Recalculate max health with new endurance
+  const newMaxHp = calculateMaxHealth(newBaseStats.endurance)
+  const hpDiff = newMaxHp - oldMaxHp
+
+  // Heal character by the HP increase (or use full heal if preferred)
+  updated.health = Math.min(newMaxHp, updated.health + hpDiff)
+  updated.maxHealth = newMaxHp
+
+  // Increment level
+  updated.level += 1
+
+  // Recalculate derived stats (base + equipment + effects)
+  // Note: We pass empty activeEffects array here as they're managed in game state
+  updated.stats = calculateDerivedStats(newBaseStats, updated.inventory, [])
+
+  return updated
+}
+
+/**
+ * Processes active effects at the end of a turn, decrementing durations and removing expired effects.
+ *
+ * TICKET 10.3: Effect Entropy (Fixing Eternal Potions)
+ *
+ * Logic:
+ * - Decrements remainingTurns for each active effect
+ * - Removes effects with remainingTurns <= 0
+ * - Recalculates derived stats to reflect removed buffs
+ * - Returns updated character and list of expired effect names
+ *
+ * @param character - The character whose effects to process
+ * @param activeEffects - The current active effects (from game state)
+ * @returns Updated character and list of expired effect names
+ *
+ * @example
+ * const result = processTurnEffects(char, activeEffects)
+ * // result.character - updated character
+ * // result.expiredEffects - ["Health Potion", "Strength Elixir"]
+ */
+export function processTurnEffects(
+  character: Character,
+  activeEffects: ActiveEffect[]
+): { character: Character; expiredEffects: string[] } {
+  const expiredEffects: string[] = []
+
+  // Process each effect: decrement turns and filter out expired ones
+  const updatedEffects = activeEffects
+    .map(effect => ({
+      ...effect,
+      remainingTurns: effect.remainingTurns - 1,
+    }))
+    .filter(effect => {
+      if (effect.remainingTurns <= 0) {
+        expiredEffects.push(effect.name)
+        return false // Remove expired effect
+      }
+      return true // Keep active effect
+    })
+
+  // Recalculate derived stats with updated effects
+  const updatedStats = calculateDerivedStats(
+    character.baseStats,
+    character.inventory,
+    updatedEffects
+  )
+
+  return {
+    character: {
+      ...character,
+      stats: updatedStats,
+    },
+    expiredEffects,
+  }
+}
+
+/**
+ * Generates effect properties for consumable items based on name and rarity.
+ *
+ * SPRINT 10.1: Data Integrity Fix - Placebo Potions
+ *
+ * Logic:
+ * - Potions/Elixirs → Healing effect (15 HP base, +10 if rare)
+ * - Scrolls → Wisdom buff (+2 for 3 turns)
+ * - Other items → No effect (returns undefined)
+ *
+ * @param name - The item name (checked for keywords)
+ * @param rarity - The item rarity (affects healing amount)
+ * @returns Effect object or undefined
+ *
+ * @example
+ * generateItemEffect('Health Potion', 'common') // { type: 'heal', value: 15 }
+ * generateItemEffect('Rare Elixir', 'rare') // { type: 'heal', value: 25 }
+ * generateItemEffect('Wisdom Scroll', 'common') // { type: 'buff', stat: 'wisdom', value: 2, duration: 3 }
+ */
+export function generateItemEffect(name: string, rarity: string) {
+  const lower = name.toLowerCase()
+
+  // Healing consumables (potions, elixirs)
+  if (lower.includes("potion") || lower.includes("elixir")) {
+    return {
+      type: "heal" as const,
+      value: 15 + (rarity === "rare" ? 10 : 0),
+      duration: 0, // Instant effect (no duration)
+    }
+  }
+
+  // Buff consumables (scrolls)
+  if (lower.includes("scroll")) {
+    return {
+      type: "buff" as const,
+      stat: "wisdom" as const,
+      value: 2,
+      duration: 3, // Lasts 3 turns
+    }
+  }
+
+  // No effect for non-consumables
+  return undefined
+}

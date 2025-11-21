@@ -78,6 +78,7 @@ export interface MerchantItem {
   type: "weapon" | "armor" | "potion" | "utility"
   price: number
   rarity: "common" | "rare" | "legendary"
+  stats?: Partial<CharacterStats>
 }
 
 export type StoryTurn = {
