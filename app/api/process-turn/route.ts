@@ -19,7 +19,59 @@ export async function POST(request: NextRequest) {
       combatIntensity,
       tones,
       diceRoll, // Receive dice roll result from frontend
+      actionType, // Sprint 8: Receive actionType for death detection
     } = await request.json()
+
+    // ========================================================================
+    // TICKET 8.1: WORLD STATE TRACKING - Parse World State from Request
+    // ========================================================================
+    const worldState: string[] = (customConfig as any)?.worldState || []
+    console.log("[DEV B] World State:", worldState)
+
+    // ========================================================================
+    // TICKET 8.2: DEATH NARRATIVE ENDPOINT - Early Death Detection
+    // ========================================================================
+    if (playerChoice === "DIRECT_DEATH_TRIGGER" || actionType === "death") {
+      console.log("[DEV B] Death condition detected, generating final narrative")
+
+      // Build recent history for death context
+      const recentHistory = storyHistory
+        .slice(-5)
+        .map((entry: StoryEntry) => `${entry.type}: ${entry.text}`)
+        .join("\n\n")
+
+      // Death-specific prompt (bypasses standard system prompt)
+      const deathPrompt = `You are the Game Master. The player (Level ${character.level} ${character.race} ${character.background}) has perished.
+Current Context: ${recentHistory}
+
+Generate a grim, final paragraph describing their demise.
+Do NOT offer choices.
+Do NOT offer hope.
+Output JSON: { "narrative": "...", "choices": [], "consequenceTier": "lethal", "stateChanges": { "isDead": true } }`
+
+      const deathResult = await generateText({
+        model: "openai/gpt-4o-mini",
+        prompt: deathPrompt,
+        temperature: 0.8,
+        experimental_providerMetadata: {
+          openai: {
+            response_format: { type: "json_object" },
+          },
+        },
+      })
+
+      const deathResponse = JSON.parse(deathResult.text)
+
+      // Force death response format
+      return NextResponse.json({
+        narrative: deathResponse.narrative,
+        choices: [], // No choices in death
+        consequenceTier: "lethal",
+        stateChanges: {
+          isDead: true,
+        },
+      })
+    }
 
     // ========================================================================
     // TICKET 2.3: PACING ENGINE - Calculate Turn Count
@@ -63,7 +115,8 @@ export async function POST(request: NextRequest) {
       tones,
       turnCount,
       combatState,
-      questProgress
+      questProgress,
+      worldState // TICKET 8.1: Pass world state to prompt builder
     )
 
     // Build story context
@@ -130,6 +183,7 @@ Format as JSON:
     },
     "effects": [{"id": "...", "name": "...", "type": "buff|debuff", "value": number, "remainingTurns": number}] (optional)
   },
+  "newWorldFacts": ["string"] (optional, concise summaries of major plot events for persistent memory),
   "startCombat": {
     "enemyId": "string",
     "enemyName": "string",
@@ -169,8 +223,11 @@ Format as JSON:
 
       // Only calculate damage for non-NONE tiers
       if (tier !== "NONE") {
-        calculatedHealth = -calculateDamage(tier, true) // Negative for damage
-        console.log(`[DEV B] AI requested "${tier}" damage → ${calculatedHealth} HP`)
+        // ========================================================================
+        // TICKET 8.4: LEVEL SCALING INTEGRATION - Pass character level to calculateDamage
+        // ========================================================================
+        calculatedHealth = -calculateDamage(tier, true, character.level || 1) // Negative for damage
+        console.log(`[DEV B] Damage Calculation: Tier ${tier} @ Lvl ${character.level} -> ${calculatedHealth}`)
       }
     }
 
@@ -179,6 +236,33 @@ Format as JSON:
       ...aiResponse.stateChanges,
       health: calculatedHealth !== 0 ? calculatedHealth : aiResponse.stateChanges?.health,
     })
+
+    // ========================================================================
+    // TICKET 8.3: DETERMINISTIC COMBAT TRIGGER - Force Combat on Dangerous Failure
+    // ========================================================================
+    const riskLevel = diceRoll?.riskLevel || "safe"
+    const isDangerousFailure =
+      (diceRoll?.success === false) &&
+      (riskLevel === "dangerous" || riskLevel === "lethal")
+
+    const isCombatActive = combatState.isActive
+
+    if (isDangerousFailure && !isCombatActive) {
+      // Check if AI already started combat
+      if (!aiResponse.startCombat) {
+        console.log("[DEV B] Forcing Combat due to Dangerous Failure")
+
+        // Inject Force-Start Combat Data
+        aiResponse.startCombat = {
+          enemyId: `force-enemy-${crypto.randomUUID()}`,
+          enemyName: "Ambushing Threat", // Generic fallback
+          enemyHpMax: 20 + (character.level * 2) // Scaling HP
+        }
+
+        // Append narrative justification
+        aiResponse.narrative += "\n\nYour failure attracts unwanted attention. An enemy moves to strike!"
+      }
+    }
 
     // ========================================================================
     // TICKET 4.3: STATE MIDDLEWARE - Combat Calculations & Persistence
@@ -246,6 +330,14 @@ Format as JSON:
         questComplete: true,
       }
       console.log(`[DEV D] Turn ${turnCount}: Auto-setting questComplete = true`)
+    }
+
+    // ========================================================================
+    // TICKET 8.1: WORLD STATE TRACKING - Handle newWorldFacts from AI Response
+    // ========================================================================
+    if (aiResponse.newWorldFacts && Array.isArray(aiResponse.newWorldFacts)) {
+      finalStateChanges.worldUpdates = aiResponse.newWorldFacts
+      console.log("[DEV B] New World Facts:", aiResponse.newWorldFacts)
     }
 
     const finalResponse = {
@@ -316,6 +408,7 @@ function buildGameMasterPrompt(
   turnCount?: number,
   combatState?: CombatState,
   questProgress?: any,
+  worldState?: string[], // TICKET 8.1: Add world state parameter
 ): string {
   const activeTones = tones || customConfig?.tones || ["epic"]
   const activeCombat = combatIntensity || customConfig?.combatFrequency || 3
@@ -386,6 +479,12 @@ ${customConfig.modifications
     : ""
 }
 ${combatInstructions}
+
+WORLD CONTEXT (PERSISTENT MEMORY):
+${worldState && worldState.length > 0 ? worldState.join('\n') : "No major events recorded yet."}
+
+INSTRUCTION: If a MAJOR plot event occurs (e.g., NPC met, Boss killed, Secret revealed), add a concise summary string to the 'newWorldFacts' array in your JSON response.
+
 CRITICAL RULES FOR RESPONSES:
 
 1. ACTION TYPES (MANDATORY ENUM):
