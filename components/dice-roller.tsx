@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Button } from "@/components/ui/button"
-import { X, Sparkles, Zap, Dices, RotateCcw } from "lucide-react"
+import { X, Sparkles, Zap, Dices, RotateCcw, Heart } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface DiceRollerProps {
@@ -14,6 +14,9 @@ interface DiceRollerProps {
   statName?: string
   bonus?: number
   advantage?: boolean
+  currentHealth?: number
+  maxHealth?: number
+  statValue?: number
 }
 
 type DiceState = "ready" | "rolling" | "slowing" | "result"
@@ -27,6 +30,9 @@ export function DiceRoller({
   statName,
   bonus = 0,
   advantage = false,
+  currentHealth,
+  maxHealth,
+  statValue,
 }: DiceRollerProps) {
   const [diceState, setDiceState] = React.useState<DiceState>("ready")
   const [result, setResult] = React.useState<number | null>(null)
@@ -146,6 +152,25 @@ export function DiceRoller({
         ))}
 
         <div className="relative p-6 space-y-6">
+          {/* Mini-HUD for Mobile */}
+          {currentHealth !== undefined && maxHealth !== undefined && (
+            <div className="flex justify-between items-center bg-muted/50 p-2 rounded-lg mb-4 text-xs font-mono">
+              {/* Left: Health */}
+              <div className={cn("flex items-center gap-2", currentHealth < maxHealth * 0.3 && "text-red-600 font-bold")}>
+                <Heart className="w-3 h-3" />
+                <span>{currentHealth}/{maxHealth} HP</span>
+              </div>
+
+              {/* Right: Stat Context */}
+              {statName && statValue !== undefined && (
+                <div className="flex items-center gap-2">
+                  <span className="uppercase">{statName}</span>
+                  <span className="font-bold">{statValue} ({modifier >= 0 ? "+" : ""}{modifier})</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Header */}
           <div className="flex items-start justify-between">
             <div className="space-y-1">
