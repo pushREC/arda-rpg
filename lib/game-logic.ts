@@ -11,7 +11,7 @@ import {
 import { generateUUID } from "./utils"
 
 const SAVE_VERSION = "1.0.0"
-const MAX_INVENTORY_SIZE = 50
+export const MAX_INVENTORY_SIZE = 20
 
 /**
  * Default combat state for new characters and migration.
@@ -722,12 +722,27 @@ export function generateItemEffect(name: string, rarity: string) {
 
   // Buff consumables (scrolls)
   if (lower.includes("scroll")) {
+    let stat: keyof CharacterStats = "wisdom"; // Default fallback
+
+    // Keyword Mapping
+    if (lower.includes("strength") || lower.includes("might") || lower.includes("valor") || lower.includes("blade")) {
+      stat = "valor";
+    } else if (lower.includes("swift") || lower.includes("speed") || lower.includes("craft") || lower.includes("dexterity")) {
+      stat = "craft";
+    } else if (lower.includes("shield") || lower.includes("guard") || lower.includes("endurance") || lower.includes("iron")) {
+      stat = "endurance";
+    } else if (lower.includes("speech") || lower.includes("charm") || lower.includes("fellowship") || lower.includes("song")) {
+      stat = "fellowship";
+    } else if (lower.includes("ancient") || lower.includes("lore") || lower.includes("magic") || lower.includes("mystic")) {
+      stat = "lore";
+    }
+
     return {
       type: "buff" as const,
-      stat: "wisdom" as const,
+      stat,
       value: 2,
       duration: 3, // Lasts 3 turns
-    }
+    };
   }
 
   // No effect for non-consumables

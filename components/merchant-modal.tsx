@@ -16,7 +16,8 @@ import type { MerchantItem, InventoryItem } from "@/lib/types"
 import { toast } from "sonner"
 import { useGameStore } from "@/lib/game-state"
 import { generateUUID } from "@/lib/utils"
-import { generateItemStats, generateItemEffect } from "@/lib/game-logic"
+import { generateItemStats, generateItemEffect, MAX_INVENTORY_SIZE } from "@/lib/game-logic"
+import { cn } from "@/lib/utils"
 
 interface MerchantModalProps {
   isOpen: boolean
@@ -92,6 +93,8 @@ function convertMerchantItemToInventory(item: MerchantItem): InventoryItem {
 export function MerchantModal({ isOpen, onClose, characterGold, onPurchaseComplete }: MerchantModalProps) {
   const [shopInventory, setShopInventory] = React.useState<MerchantItem[]>([])
   const store = useGameStore()
+  const inventoryCount = useGameStore(state => state.character?.inventory.length || 0)
+  const isInventoryFull = inventoryCount >= MAX_INVENTORY_SIZE
 
   // Generate shop inventory on mount
   React.useEffect(() => {
@@ -106,6 +109,11 @@ export function MerchantModal({ isOpen, onClose, characterGold, onPurchaseComple
   }, [isOpen, shopInventory.length])
 
   const handleBuy = (item: MerchantItem) => {
+    if (isInventoryFull) {
+      toast.error("Inventory is full!")
+      return
+    }
+
     if (characterGold < item.price) {
       toast.error("Not enough gold!")
       return
@@ -185,11 +193,11 @@ export function MerchantModal({ isOpen, onClose, characterGold, onPurchaseComple
                   </div>
                   <Button
                     onClick={() => handleBuy(item)}
-                    disabled={characterGold < item.price}
+                    disabled={characterGold < item.price || isInventoryFull}
                     className="w-full"
-                    variant={characterGold < item.price ? "outline" : "default"}
+                    variant={characterGold < item.price || isInventoryFull ? "outline" : "default"}
                   >
-                    {characterGold < item.price ? "Too Expensive" : "Buy"}
+                    {isInventoryFull ? "Inventory Full" : characterGold < item.price ? "Too Expensive" : "Buy"}
                   </Button>
                 </CardFooter>
               </Card>
@@ -203,7 +211,10 @@ export function MerchantModal({ isOpen, onClose, characterGold, onPurchaseComple
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-row items-center">
+          <div className={cn("text-xs font-mono mr-auto", isInventoryFull ? "text-red-500 font-bold" : "text-muted-foreground")}>
+            Capacity: {inventoryCount}/{MAX_INVENTORY_SIZE}
+          </div>
           <Button onClick={handleLeaveShop} variant="outline" className="w-full sm:w-auto">
             Leave Shop
           </Button>
