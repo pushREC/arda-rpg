@@ -30,7 +30,7 @@ console.log("-".repeat(60))
 console.log("This demonstrates why Ticket D.1 was needed:")
 
 try {
-  // @ts-expect-error - Testing lowercase input (should fail)
+  // Testing lowercase input - the "as any" bypasses type checking for this test
   const lowercaseResult = calculateDamage("dangerous" as any)
   console.log(`calculateDamage("dangerous") → ${lowercaseResult}`)
   console.log("❌ UNEXPECTED: Function accepted lowercase (should have failed)")

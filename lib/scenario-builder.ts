@@ -1,4 +1,4 @@
-import type { Character, CustomScenarioConfig } from "./types"
+import type { Character, CustomScenarioConfig, ScenarioTone } from "./types"
 
 export function generateScenarioId(): string {
   return `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -78,8 +78,8 @@ function getDefaultRegion(race: string): string {
   return raceRegions[race] || "Gondor"
 }
 
-function getDefaultTones(background: string): string[] {
-  const backgroundTones: Record<string, string[]> = {
+function getDefaultTones(background: string): ScenarioTone[] {
+  const backgroundTones: Record<string, ScenarioTone[]> = {
     ranger: ["mysterious", "personal"],
     scholar: ["mysterious", "hopeful"],
     merchant: ["whimsical", "personal"],

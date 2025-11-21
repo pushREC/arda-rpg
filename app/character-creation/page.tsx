@@ -345,7 +345,7 @@ export default function CharacterCreationPage() {
                       <div className="pt-2 space-y-2 border-t border-[hsl(30,40%,60%)]">
                         <p className="text-sm font-medium">Stat Bonuses:</p>
                         <p className="text-sm text-[hsl(30,40%,40%)]">
-                          {race.bonuses.flexChoice
+                          {"flexChoice" in race.bonuses
                             ? "+2 to any stat of your choice"
                             : Object.entries(race.bonuses)
                                 .map(([stat, val]) => `+${val} ${stat.charAt(0).toUpperCase() + stat.slice(1)}`)

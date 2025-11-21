@@ -53,9 +53,9 @@ Output JSON: { "narrative": "...", "choices": [], "consequenceTier": "lethal", "
         model: "openai/gpt-4o-mini",
         prompt: deathPrompt,
         temperature: 0.8,
-        experimental_providerMetadata: {
+        providerOptions: {
           openai: {
-            response_format: { type: "json_object" },
+            responseFormat: { type: "json_object" },
           },
         },
       })
@@ -200,9 +200,9 @@ Format as JSON:
       prompt: userPrompt,
       temperature: 0.8,
       // CRITICAL: Enforce JSON output
-      experimental_providerMetadata: {
+      providerOptions: {
         openai: {
-          response_format: { type: "json_object" },
+          responseFormat: { type: "json_object" },
         },
       },
     })

@@ -184,6 +184,7 @@ export type RegionOption = {
 export type ToneOption = {
   id: ScenarioTone
   label: string
+  description: string
   icon: string
   color: string
 }

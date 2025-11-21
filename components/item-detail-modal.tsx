@@ -21,7 +21,7 @@ export function ItemDetailModal({ isOpen, item, onClose, onUse, onEquip, onDrop,
   const getItemIcon = () => {
     if (item.type === "weapon") return Swords
     if (item.type === "armor") return Shield
-    if (item.type === "consumable") return Heart
+    if (item.type === "potion") return Heart
     return Sparkles
   }
 
@@ -71,7 +71,7 @@ export function ItemDetailModal({ isOpen, item, onClose, onUse, onEquip, onDrop,
 
           {/* Actions */}
           <div className="space-y-2 pt-2">
-            {onUse && item.type === "consumable" && (
+            {onUse && item.type === "potion" && (
               <Button onClick={onUse} className="w-full bg-[hsl(30,50%,40%)] hover:bg-[hsl(30,50%,35%)] text-white">
                 Use Item
               </Button>

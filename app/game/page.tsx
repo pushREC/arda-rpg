@@ -88,7 +88,7 @@ function GamePageContent() {
   const [showItemDetail, setShowItemDetail] = React.useState(false)
   const [showMerchantModal, setShowMerchantModal] = React.useState(false)
   const MAX_RETRIES = 3
-  const loadingTimeoutRef = React.useRef<NodeJS.Timeout>()
+  const loadingTimeoutRef = React.useRef<NodeJS.Timeout | undefined>(undefined)
   const [gameOverCause, setGameOverCause] = React.useState("")
 
   const isInCombat =

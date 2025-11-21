@@ -35,6 +35,8 @@ const actionIcons = {
   narrative: MessageCircle,
   stealth: Eye,
   survival: Mountain,
+  trade: Users, // Trade actions use social icon
+  death: Swords, // Death actions use combat icon
 }
 
 const statIcons = {

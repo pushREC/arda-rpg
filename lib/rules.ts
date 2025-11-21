@@ -555,12 +555,12 @@ export function getActiveEffectBonus(effects: ActiveEffect[], stat: keyof Charac
  * - Dwarf: Stone-cunning (advantage on endurance, craft)
  * - Human: Versatile (advantage on fellowship, valor)
  */
-export const RACE_ABILITIES: Record<string, { advantage: string[] }> = {
+export const RACE_ABILITIES: Record<string, { advantage: readonly string[] }> = {
   elf: { advantage: ["wisdom", "investigation"] },
   hobbit: { advantage: ["survival", "stealth"] },
   dwarf: { advantage: ["endurance", "craft"] },
   human: { advantage: ["fellowship", "valor"] },
-} as const
+}
 
 /**
  * Determines if a character should roll with advantage based on their race.

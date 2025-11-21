@@ -107,14 +107,14 @@ export const REGIONS: RegionOption[] = [
 ]
 
 export const TONE_OPTIONS: ToneOption[] = [
-  { id: "dark", label: "Dark", icon: "Cloud", color: "text-slate-600" },
-  { id: "hopeful", label: "Hopeful", icon: "Sun", color: "text-yellow-600" },
-  { id: "mysterious", label: "Mysterious", icon: "HelpCircle", color: "text-purple-600" },
-  { id: "epic", label: "Epic", icon: "Zap", color: "text-red-600" },
-  { id: "personal", label: "Personal", icon: "Heart", color: "text-pink-600" },
-  { id: "desperate", label: "Desperate", icon: "AlertTriangle", color: "text-orange-600" },
-  { id: "whimsical", label: "Whimsical", icon: "Sparkles", color: "text-blue-600" },
-  { id: "melancholic", label: "Melancholic", icon: "CloudRain", color: "text-indigo-600" },
+  { id: "dark", label: "Dark", description: "Shadows and danger lurk everywhere", icon: "Cloud", color: "text-slate-600" },
+  { id: "hopeful", label: "Hopeful", description: "Light shines even in dark times", icon: "Sun", color: "text-yellow-600" },
+  { id: "mysterious", label: "Mysterious", description: "Secrets and riddles abound", icon: "HelpCircle", color: "text-purple-600" },
+  { id: "epic", label: "Epic", description: "Grand battles and legendary deeds", icon: "Zap", color: "text-red-600" },
+  { id: "personal", label: "Personal", description: "Intimate stakes and character growth", icon: "Heart", color: "text-pink-600" },
+  { id: "desperate", label: "Desperate", description: "Against all odds, survival is uncertain", icon: "AlertTriangle", color: "text-orange-600" },
+  { id: "whimsical", label: "Whimsical", description: "Lighthearted adventure with wonder", icon: "Sparkles", color: "text-blue-600" },
+  { id: "melancholic", label: "Melancholic", description: "Bittersweet journeys and lost glory", icon: "CloudRain", color: "text-indigo-600" },
 ]
 
 export const COMPANION_PREFERENCES = [

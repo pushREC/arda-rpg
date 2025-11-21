@@ -51,9 +51,9 @@ Format as JSON:
       prompt: userPrompt,
       temperature: 0.8,
       // CRITICAL: Enforce JSON output
-      experimental_providerMetadata: {
+      providerOptions: {
         openai: {
-          response_format: { type: "json_object" },
+          responseFormat: { type: "json_object" },
         },
       },
     })
