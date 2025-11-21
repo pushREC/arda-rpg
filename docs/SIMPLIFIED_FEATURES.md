@@ -63,9 +63,9 @@
 
 **Simplified:**
 - ⚠️ **One companion maximum**
-- ⚠️ Relationship: Binary (Allied = 100, or Neutral = 0)
-- ⚠️ Benefit: One "assist" per scenario (+5 to one roll)
-- ⚠️ Simple tracking (name, description, usedAssist boolean)
+- ⚠️ Relationship: Narrative flavor only (no numeric tracking exposed)
+- ⚠️ Benefit: Narrative support only (no mechanical stat bonus in V1.0)
+- ⚠️ Simple tracking (name, description)
 
 **Complexity:** High → Low | **Value:** Low → Medium | **Verdict:** SIMPLIFY
 

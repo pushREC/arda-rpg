@@ -22,10 +22,13 @@ import type { CharacterStats, InventoryItem, ActiveEffect, Companion } from "./t
  * - Stat 8 (Legendary) = +5 modifier
  *
  * @param value - The stat value (should be 3-8)
- * @returns The modifier to add to dice rolls (0-5)
+ * @returns The modifier to add to dice rolls (0-9)
  */
 export function getStatModifier(value: number): number {
-  return Math.max(0, value - 3)
+  // Clamp value to max 12 (Legendary + Artifacts + Buffs) to prevent logic breaks
+  // Formula: value - 3
+  const safeValue = Math.min(12, value)
+  return Math.max(0, safeValue - 3)
 }
 
 /**
