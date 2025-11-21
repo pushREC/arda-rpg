@@ -16,6 +16,7 @@ import { ItemDetailModal } from "@/components/item-detail-modal"
 import { SaveLoadModal } from "@/components/save-load-modal"
 import { QuestTracker } from "@/components/quest-tracker"
 import { LevelUpModal } from "@/components/level-up-modal"
+import { MerchantModal } from "@/components/merchant-modal"
 import type { StoryEntry, EnhancedChoice, StatType, CustomScenarioConfig, InventoryItem } from "@/lib/types"
 import { toast } from "sonner"
 import { unlockAchievement, getAchievementById } from "@/lib/achievements"
@@ -78,6 +79,7 @@ function GamePageContent() {
   const [retryCount, setRetryCount] = React.useState(0)
   const [selectedItem, setSelectedItem] = React.useState<InventoryItem | null>(null)
   const [showItemDetail, setShowItemDetail] = React.useState(false)
+  const [showMerchantModal, setShowMerchantModal] = React.useState(false)
   const MAX_RETRIES = 3
   const loadingTimeoutRef = React.useRef<NodeJS.Timeout>()
   const [gameOverCause, setGameOverCause] = React.useState("")
@@ -208,6 +210,17 @@ function GamePageContent() {
       return
     }
 
+    // [DEV C - Ticket 5.2] Gatekeeper: Prevent dead characters from playing
+    if (validation.character.isDead) {
+      console.log("[DEV C] Character is dead. Enforcing permadeath.")
+      toast.error("This character has fallen.", {
+        description: "Their tale has ended.",
+      })
+      setShowGameOver(true)
+      setGameOverCause("This character has already perished")
+      return
+    }
+
     setCharacter(validation.character)
     setScenario(validation.scenario)
     setCurrentHealth(validation.character.maxHealth)
@@ -230,12 +243,28 @@ function GamePageContent() {
     }
   }, [storyEntries, currentHealth, currentXP, currentLevel])
 
+  // [DEV C - Ticket 5.2] Death Watcher: Enforce permadeath when health hits 0
   React.useEffect(() => {
-    if (currentHealth <= 0 && !showGameOver) {
-      setGameOverCause("Your health reached zero")
-      modalQueue.enqueue("gameOver", { cause: "Your health reached zero" }, 100)
+    if (currentHealth <= 0 && character && !character.isDead) {
+      console.log("[DEV C] Player died. Enforcing permadeath.")
+
+      // 1. Trigger UI
+      const deathCause = "Slain in battle"
+      setGameOverCause(deathCause)
+      modalQueue.enqueue("gameOver", { cause: deathCause }, 100)
+
+      // 2. Hard Save Death State
+      const deadChar = { ...character, isDead: true, health: 0 }
+      setCharacter(deadChar)
+
+      // Force immediate persist to localStorage
+      localStorage.setItem("character", JSON.stringify(deadChar))
+
+      // Update Zustand store
+      useGameStore.getState().setCharacter(deadChar)
+      useGameStore.getState().updateLastSaved()
     }
-  }, [currentHealth, showGameOver])
+  }, [currentHealth, character])
 
   React.useEffect(() => {
     if (isLoading) {
@@ -465,6 +494,15 @@ What will you do?`
   const handleChoiceSelect = async (choice: string | EnhancedChoice) => {
     const choiceText = typeof choice === "string" ? choice : choice.text
     const enhancedChoice = typeof choice === "object" ? choice : null
+
+    // [DEV C - Ticket 5.1] Handle Trade Actions
+    if (enhancedChoice?.actionType === "trade") {
+      addStoryEntry("action", `You chose: ${choiceText}`)
+      setShowMerchantModal(true)
+      // Do NOT call continueStoryAfterChoice yet
+      // The merchant modal's "Leave Shop" button will handle continuing the story
+      return
+    }
 
     addStoryEntry("action", `You chose: ${choiceText}`)
 
@@ -931,6 +969,7 @@ What will you do?`
         health={currentHealth}
         maxHealth={character.maxHealth}
         level={currentLevel}
+        combatState={character.combat}
         onMenuClick={() => setShowCharacterDrawer(true)}
         onViewAchievements={() => setShowAchievements(true)}
         onSaveGame={() => setShowSaveLoad(true)}
@@ -1092,6 +1131,19 @@ What will you do?`
             handleDropItem(selectedItem)
             setShowItemDetail(false)
             setSelectedItem(null)
+          }}
+        />
+      )}
+
+      {/* [DEV C - Ticket 5.1] Merchant Modal */}
+      {showMerchantModal && (
+        <MerchantModal
+          isOpen={showMerchantModal}
+          onClose={() => setShowMerchantModal(false)}
+          characterGold={character.gold || 0}
+          onPurchaseComplete={() => {
+            // Continue the story after leaving the shop
+            continueStoryAfterChoice("I leave the shop.", true)
           }}
         />
       )}

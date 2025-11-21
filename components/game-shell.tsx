@@ -4,6 +4,8 @@ import * as React from "react"
 import { Button } from "@/components/ui/button"
 import { Heart, Volume2, VolumeX, Menu, Trophy, Save } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { CombatOverlay } from "@/components/combat-overlay"
+import type { CombatState } from "@/lib/types"
 
 interface GameShellProps {
   children?: React.ReactNode
@@ -12,6 +14,7 @@ interface GameShellProps {
   health?: number
   maxHealth?: number
   level?: number
+  combatState?: CombatState
   onMenuClick?: () => void
   onViewAchievements?: () => void
   onSaveGame?: () => void
@@ -24,6 +27,7 @@ export function GameShell({
   health = 100,
   maxHealth = 100,
   level = 1,
+  combatState,
   onMenuClick,
   onViewAchievements,
   onSaveGame,
@@ -114,6 +118,13 @@ export function GameShell({
             </div>
           </div>
         </header>
+
+        {/* Combat Overlay - Appears when combat is active */}
+        {combatState?.isActive && (
+          <div className="w-full z-40">
+            <CombatOverlay combatState={combatState} />
+          </div>
+        )}
 
         {/* Main Content Area */}
         <div className="flex-1 flex overflow-hidden">
