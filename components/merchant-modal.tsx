@@ -16,6 +16,7 @@ import type { MerchantItem, InventoryItem } from "@/lib/types"
 import { toast } from "sonner"
 import { useGameStore } from "@/lib/game-state"
 import { generateUUID } from "@/lib/utils"
+import { generateItemStats } from "@/lib/game-logic"
 
 interface MerchantModalProps {
   isOpen: boolean
@@ -57,6 +58,11 @@ function generateMerchantItem(): MerchantItem {
     rarity = "legendary"
   }
 
+  // Generate stats for weapons and armor (TICKET 10.1)
+  const stats = (type === "weapon" || type === "armor")
+    ? generateItemStats(randomKeyword, rarity)
+    : undefined
+
   return {
     id: `merchant-${generateUUID()}`,
     name,
@@ -64,6 +70,7 @@ function generateMerchantItem(): MerchantItem {
     type,
     price,
     rarity,
+    stats,
   }
 }
 
@@ -77,6 +84,7 @@ function convertMerchantItemToInventory(item: MerchantItem): InventoryItem {
     value: item.price,
     equipped: false,
     consumable: item.type === "potion",
+    stats: item.stats, // Include stats from merchant item (TICKET 10.1)
   }
 }
 
