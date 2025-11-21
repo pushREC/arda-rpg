@@ -42,7 +42,7 @@ import { useSound } from "@/components/sound-provider"
 import { generateUUID } from "@/lib/utils"
 import { modalQueue } from "@/lib/modal-queue"
 import { NotificationManager, useNotifications } from "@/components/notification-manager"
-import { useGameStore } from "@/lib/game-state"
+import { useGame } from "@/lib/game-context"
 
 function GamePageContent() {
   const router = useRouter()
@@ -52,7 +52,8 @@ function GamePageContent() {
   const [character, setCharacter] = React.useState<any>(null)
   const [scenario, setScenario] = React.useState<any>(null)
   const [storyEntries, setStoryEntries] = React.useState<StoryEntry[]>([])
-  const [currentHealth, setCurrentHealth] = React.useState(100)
+  // [TICKET 18.6 FIX] REMOVED currentHealth local state - character.health is now single source of truth
+  // This prevents race conditions during level-up where currentHealth could drift from character.health
   const [currentXP, setCurrentXP] = React.useState(0)
   const [currentLevel, setCurrentLevel] = React.useState(1)
   const [showDiceRoller, setShowDiceRoller] = React.useState(false)
@@ -106,15 +107,21 @@ function GamePageContent() {
 
   const handleUseItem = React.useCallback(
     (item: InventoryItem) => {
-      const result = applyItem(item, character, currentHealth)
+      // [TICKET 18.6 FIX] Use character.health as single source of truth
+      const result = applyItem(item, character, character.health)
 
       if (result.success) {
         // [TICKET 13.2] Play potion sound on item use
         playSound("potion")
         toast.success(result.message)
 
+        let updatedCharacter = { ...character }
+        const updatedInventory = character.inventory.filter((i: any) => i.id !== item.id)
+        updatedCharacter.inventory = updatedInventory
+
         if (result.healthChange) {
-          setCurrentHealth((prev) => prev + result.healthChange!)
+          // [TICKET 18.6 FIX] Update character.health directly instead of separate state
+          updatedCharacter.health = Math.min(character.maxHealth, character.health + result.healthChange)
           addNotification("health", result.healthChange)
         }
 
@@ -122,15 +129,13 @@ function GamePageContent() {
           setActiveEffects((prev) => [...prev, result.effect!])
         }
 
-        const updatedInventory = character.inventory.filter((i: any) => i.id !== item.id)
-        const updatedCharacter = { ...character, inventory: updatedInventory }
         setCharacter(updatedCharacter)
         localStorage.setItem("character", JSON.stringify(updatedCharacter))
       } else {
         toast.error(result.message)
       }
     },
-    [character, currentHealth, addNotification, playSound],
+    [character, addNotification, playSound],
   )
 
   const handleEquipItem = React.useCallback(
@@ -165,24 +170,24 @@ function GamePageContent() {
 
   const handleSellItem = React.useCallback(
     (item: InventoryItem, sellValue: number) => {
-      // CRITICAL: Update Zustand store first (persistent source of truth)
-      const store = useGameStore.getState()
-      store.removeInventoryItem(item.id)
-      store.addGold(sellValue)
-
-      // Then sync local state from Zustand to ensure consistency
-      const updatedCharacter = useGameStore.getState().character
-      if (updatedCharacter) {
-        setCharacter(updatedCharacter)
-        // Zustand persist middleware handles localStorage automatically
+      // [TICKET 18.5] Migrated from Zustand to React Context
+      // Update local state directly and persist to localStorage
+      const updatedInventory = character.inventory.filter((i: any) => i.id !== item.id)
+      const updatedCharacter = {
+        ...character,
+        inventory: updatedInventory,
+        gold: (character.gold || 0) + sellValue,
       }
+
+      setCharacter(updatedCharacter)
+      localStorage.setItem("character", JSON.stringify(updatedCharacter))
 
       addNotification("gold", sellValue)
       toast.success(`Sold ${item.name}`, {
         description: `+${sellValue} gold`,
       })
     },
-    [addNotification],
+    [character, addNotification],
   )
 
   React.useEffect(() => {
@@ -216,10 +221,14 @@ function GamePageContent() {
       const autoSaveData = loadAutoSave()
       if (autoSaveData.success && autoSaveData.data) {
         toast.info("Recovered from auto-save")
-        setCharacter(autoSaveData.data.character)
+        // [TICKET 18.6 FIX] Restore health directly on character object
+        const restoredChar = {
+          ...autoSaveData.data.character,
+          health: autoSaveData.data.health,
+        }
+        setCharacter(restoredChar)
         setScenario(autoSaveData.data.scenario)
         setStoryEntries(autoSaveData.data.storyEntries || [])
-        setCurrentHealth(autoSaveData.data.health)
         setCurrentXP(autoSaveData.data.currentXP || 0)
         setCurrentLevel(autoSaveData.data.currentLevel || 1)
         return
@@ -243,31 +252,38 @@ function GamePageContent() {
       return
     }
 
-    setCharacter(validation.character)
+    // [TICKET 18.6 FIX] Ensure character.health is initialized properly (single source of truth)
+    const initializedChar = {
+      ...validation.character,
+      health: validation.character.health ?? validation.character.maxHealth,
+    }
+    setCharacter(initializedChar)
     setScenario(validation.scenario)
-    setCurrentHealth(validation.character.maxHealth)
 
-    startGame(validation.character, validation.scenario)
+    startGame(initializedChar, validation.scenario)
   }, [router])
 
   React.useEffect(() => {
     if (character && scenario && storyEntries.length > 0) {
+      // [TICKET 18.6 FIX] Use character.health as single source of truth
       autoSave({
         character,
         scenario,
         storyEntries,
-        health: currentHealth,
+        health: character.health,
         currentXP,
         currentLevel,
         choiceCount,
         activeEffects,
       })
     }
-  }, [storyEntries, currentHealth, currentXP, currentLevel])
+  }, [character, scenario, storyEntries, currentXP, currentLevel, choiceCount, activeEffects])
 
   // [DEV C - Ticket 5.2] Death Watcher: Enforce permadeath when health hits 0
+  // [TICKET 18.5] Migrated from Zustand to React Context
+  // [TICKET 18.6 FIX] Use character.health as single source of truth
   React.useEffect(() => {
-    if (currentHealth <= 0 && character && !character.isDead) {
+    if (character && character.health <= 0 && !character.isDead) {
       console.log("[DEV C] Player died. Enforcing permadeath.")
 
       // 1. Trigger UI
@@ -281,12 +297,8 @@ function GamePageContent() {
 
       // Force immediate persist to localStorage
       localStorage.setItem("character", JSON.stringify(deadChar))
-
-      // Update Zustand store
-      useGameStore.getState().setCharacter(deadChar)
-      useGameStore.getState().updateLastSaved()
     }
-  }, [currentHealth, character])
+  }, [character])
 
   React.useEffect(() => {
     if (isLoading) {
@@ -311,12 +323,13 @@ function GamePageContent() {
   }, [isLoading])
 
   const handleSaveGame = React.useCallback(() => {
+    // [TICKET 18.6 FIX] Use character.health as single source of truth
     const result = saveGame({
       id: generateUUID(),
       characterName: character.name,
       scenario: scenario.title,
       timestamp: new Date(),
-      health: currentHealth,
+      health: character.health,
       maxHealth: character.maxHealth,
       turnCount: storyEntries.filter((e) => e.type === "action").length,
       character,
@@ -334,16 +347,20 @@ function GamePageContent() {
         description: result.error,
       })
     }
-  }, [character, scenario, storyEntries, currentHealth, currentXP, currentLevel, choiceCount, activeEffects])
+  }, [character, scenario, storyEntries, currentXP, currentLevel, choiceCount, activeEffects])
 
   const handleLoadGame = React.useCallback((saveId: string) => {
     const result = loadGame(saveId)
 
     if (result.success && result.data) {
-      setCharacter(result.data.character)
+      // [TICKET 18.6 FIX] Restore health directly on character object (single source of truth)
+      const loadedChar = {
+        ...result.data.character,
+        health: result.data.health,
+      }
+      setCharacter(loadedChar)
       setScenario(result.data.scenario)
       setStoryEntries(result.data.storyEntries || [])
-      setCurrentHealth(result.data.health)
       setCurrentXP(result.data.currentXP || 0)
       setCurrentLevel(result.data.currentLevel || 1)
       setChoiceCount(result.data.choiceCount || 0)
@@ -364,7 +381,8 @@ function GamePageContent() {
       return
     }
 
-    if (currentHealth >= character.maxHealth) {
+    // [TICKET 18.6 FIX] Use character.health as single source of truth
+    if (character.health >= character.maxHealth) {
       toast.info("Already at full health")
       return
     }
@@ -433,9 +451,11 @@ function GamePageContent() {
       const parsedChanges = parseStateChanges(narrative)
       const combinedChanges = { ...parsedChanges, ...stateChanges }
 
+      // [TICKET 18.6 FIX] Update character.health directly as single source of truth
+      let updatedCharacter = { ...character }
       if (combinedChanges.health !== undefined) {
         const healthChange = combinedChanges.health
-        setCurrentHealth((prev) => Math.max(0, Math.min(character.maxHealth, prev + healthChange)))
+        updatedCharacter.health = Math.max(0, Math.min(character.maxHealth, character.health + healthChange))
 
         if (healthChange > 0) {
           addNotification("health", healthChange)
@@ -447,6 +467,9 @@ function GamePageContent() {
             addNotification("damage", Math.abs(healthChange))
           }
         }
+
+        setCharacter(updatedCharacter)
+        localStorage.setItem("character", JSON.stringify(updatedCharacter))
       }
 
       addStoryEntry("narration", narrative)
@@ -459,7 +482,7 @@ function GamePageContent() {
       })
       setIsLoading(false)
     }
-  }, [character, scenario, storyEntries, isInCombat, currentHealth, currentStats, addNotification, currentLevel])
+  }, [character, scenario, storyEntries, isInCombat, currentStats, addNotification, currentLevel])
 
   const startGame = async (charData: any, scenarioData: any) => {
     setIsLoading(true)
@@ -843,6 +866,34 @@ What will you do?`
     try {
       setRetryCount(0)
 
+      // [TICKET 18.4] Process effect expiration at the START of each turn
+      // This ensures buffs expire correctly before the new turn is processed
+      let workingCharacter = { ...character }
+      let workingEffects = [...activeEffects]
+
+      if (workingEffects.length > 0) {
+        const { character: charAfterEffects, expiredEffects } = processTurnEffects(workingCharacter, workingEffects)
+
+        if (expiredEffects.length > 0) {
+          toast.info("Effects expired", {
+            description: expiredEffects.join(", "),
+          })
+        }
+
+        // Update working character and effects for this turn
+        workingCharacter = charAfterEffects
+
+        // Filter out expired effects (those with remainingTurns <= 0 after decrement)
+        workingEffects = workingEffects
+          .map((effect) => ({ ...effect, remainingTurns: effect.remainingTurns - 1 }))
+          .filter((effect) => effect.remainingTurns > 0)
+
+        // Update state immediately so the API call uses current stats
+        setCharacter(workingCharacter)
+        setActiveEffects(workingEffects)
+        localStorage.setItem("character", JSON.stringify(workingCharacter))
+      }
+
       const response = await fetch("/api/process-turn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -914,9 +965,10 @@ What will you do?`
         }
       }
 
+      // [TICKET 18.6 FIX] Update character.health directly as single source of truth
       if (combinedChanges.health !== undefined) {
         const healthChange = combinedChanges.health
-        setCurrentHealth((prev) => Math.max(0, Math.min(character.maxHealth, prev + healthChange)))
+        updatedCharacter.health = Math.max(0, Math.min(character.maxHealth, (character.health || character.maxHealth) + healthChange))
 
         if (healthChange > 0) {
           addNotification("health", healthChange)
@@ -1038,23 +1090,8 @@ What will you do?`
       addStoryEntry("narration", narrative)
       setCurrentChoices(choices)
 
-      // [SPRINT 11 - TICKET 11.4] Wire Effect Expiration
-      // Process Effects (Decrement duration)
-      if (activeEffects.length > 0) {
-        const { character: charAfterEffects, expiredEffects } = processTurnEffects(updatedCharacter, activeEffects)
-
-        if (expiredEffects.length > 0) {
-          toast.info("Effects expired", {
-            description: expiredEffects.join(", "),
-          })
-          // Update with the version that has effects applied
-          setCharacter(charAfterEffects)
-          localStorage.setItem("character", JSON.stringify(charAfterEffects))
-
-          // Update active effects state by removing expired ones
-          setActiveEffects((prev) => prev.filter((effect) => effect.remainingTurns > 0))
-        }
-      }
+      // [TICKET 18.4] Effect processing moved to START of turn (see above)
+      // Effects are now processed before the API call, not after
 
       setIsLoading(false)
     } catch (error) {
@@ -1193,10 +1230,11 @@ What will you do?`
         />
       )}
 
+      {/* [TICKET 18.6 FIX] Use character.health as single source of truth */}
       <GameShell
         characterName={character.name}
         characterClass={character.race}
-        health={currentHealth}
+        health={character.health}
         maxHealth={character.maxHealth}
         level={currentLevel}
         combatState={character.combat}
@@ -1230,9 +1268,10 @@ What will you do?`
 
           <aside className="hidden lg:block lg:w-72 flex-shrink-0 border-l-2 border-[hsl(35,40%,70%)] bg-[hsl(50,80%,95%)]">
             <div className="h-full overflow-y-auto p-3">
+              {/* [TICKET 18.6 FIX] Use character.health as single source of truth */}
               <CharacterPanel
                 character={currentStats ? { ...character, stats: currentStats } : character}
-                currentHealth={currentHealth}
+                currentHealth={character.health}
                 onViewAchievements={() => setShowAchievements(true)}
                 onItemClick={(item) => {
                   setSelectedItem(item)
@@ -1245,9 +1284,10 @@ What will you do?`
         </div>
       </GameShell>
 
+      {/* [TICKET 18.6 FIX] Use character.health as single source of truth */}
       <CharacterDrawer
         character={currentStats ? { ...character, stats: currentStats } : character}
-        currentHealth={currentHealth}
+        currentHealth={character.health}
         isOpen={showCharacterDrawer}
         onClose={() => setShowCharacterDrawer(false)}
         onViewAchievements={() => setShowAchievements(true)}
@@ -1276,7 +1316,7 @@ What will you do?`
           statName={(diceConfig as any).statName}
           bonus={(diceConfig as any).bonus}
           advantage={(diceConfig as any).advantage}
-          currentHealth={currentHealth}
+          currentHealth={character.health}
           maxHealth={character?.maxHealth}
           statValue={currentStats?.[diceConfig.statName?.toLowerCase() as keyof typeof currentStats] || character?.stats?.[diceConfig.statName?.toLowerCase() as keyof typeof character.stats] || 5}
         />
@@ -1318,7 +1358,7 @@ What will you do?`
             characterName: character.name,
             scenario: scenario.title,
             timestamp: new Date(),
-            health: currentHealth,
+            health: character.health,
             maxHealth: character.maxHealth,
             turnCount: storyEntries.filter((e) => e.type === "action").length,
           }}
@@ -1329,20 +1369,22 @@ What will you do?`
         <LevelUpModal
           isOpen={showLevelUp}
           newLevel={currentQueuedModal.data.newLevel || currentLevel}
-          onClose={() => {
-            // [SPRINT 11 - TICKET 11.3] Wire Level Up Application
-            // 1. Get the stat increases from the queued modal data
-            const increases = currentQueuedModal?.data?.statIncreases
+          onClose={(chosenStat) => {
+            // [TICKET 18.2] Interactive Level-Up Core
+            // The player now chooses which stat to increase
+            if (chosenStat) {
+              // Create stat increases object from player's choice
+              const increases = { [chosenStat]: 1 }
 
-            if (increases) {
-              // 2. Apply the stats permanently
+              // Apply the stats permanently using applyLevelUp
               const leveledChar = applyLevelUp(character, increases)
 
-              // 3. Update State & Persistence
+              // [TICKET 18.6 FIX] Update State & Persistence
+              // character.health is now single source of truth - applyLevelUp already updates it
               setCharacter(leveledChar)
               localStorage.setItem("character", JSON.stringify(leveledChar))
 
-              toast.success("Level Up Applied! Stats increased.")
+              toast.success(`Level Up! +1 ${chosenStat.charAt(0).toUpperCase() + chosenStat.slice(1)}`)
             }
 
             setShowLevelUp(false)

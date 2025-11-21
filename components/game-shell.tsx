@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import { Button } from "@/components/ui/button"
-import { Heart, Volume2, VolumeX, Menu, Trophy, Save, Tent } from "lucide-react"
+import { Slider } from "@/components/ui/slider"
+import { Heart, Volume2, VolumeX, Volume1, Menu, Trophy, Save, Tent } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CombatOverlay } from "@/components/combat-overlay"
 import type { CombatState } from "@/lib/types"
@@ -37,9 +38,26 @@ export function GameShell({
   onRest,
   disableSave = false,
 }: GameShellProps) {
-  const { isMuted, toggleMute } = useSound()
+  // [TICKET 18.6] Audio Visibility & Control
+  const { isMuted, toggleMute, volume, setVolume } = useSound()
   const [showCharacterPanel, setShowCharacterPanel] = React.useState(false)
   const [showAchievements, setShowAchievements] = React.useState(false)
+  const [showVolumeControl, setShowVolumeControl] = React.useState(false)
+  const volumeControlRef = React.useRef<HTMLDivElement>(null)
+
+  // Close volume control when clicking outside
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (volumeControlRef.current && !volumeControlRef.current.contains(event.target as Node)) {
+        setShowVolumeControl(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  // Get appropriate volume icon
+  const VolumeIcon = isMuted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2
 
   const healthPercentage = (health / maxHealth) * 100
 
@@ -123,15 +141,49 @@ export function GameShell({
                 <Trophy className="h-5 w-5 text-[hsl(45,80%,40%)]" />
               </Button>
 
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleMute}
-                title="Toggle Sound"
-                className="hover:bg-[hsl(35,40%,85%)] hidden md:flex flex-shrink-0"
-              >
-                {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-              </Button>
+              {/* [TICKET 18.6] Volume Control with Slider */}
+              <div className="relative hidden md:block" ref={volumeControlRef}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowVolumeControl(!showVolumeControl)}
+                  onDoubleClick={toggleMute}
+                  title={`Volume: ${Math.round(volume * 100)}% (Double-click to ${isMuted ? "unmute" : "mute"})`}
+                  className="hover:bg-[hsl(35,40%,85%)] flex-shrink-0"
+                >
+                  <VolumeIcon className="h-5 w-5" />
+                </Button>
+
+                {/* Volume Slider Dropdown */}
+                {showVolumeControl && (
+                  <div className="absolute right-0 top-full mt-2 p-4 bg-[hsl(50,80%,97%)] border-2 border-[hsl(35,40%,70%)] rounded-lg shadow-lg z-50 w-48">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-[hsl(25,50%,25%)]">Volume</span>
+                        <span className="text-xs text-[hsl(35,40%,50%)]">{Math.round(volume * 100)}%</span>
+                      </div>
+                      <Slider
+                        value={[volume]}
+                        onValueChange={(value) => setVolume(value[0])}
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        className="w-full"
+                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={toggleMute}
+                          className="flex-1 text-xs"
+                        >
+                          {isMuted ? "Unmute" : "Mute"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </header>

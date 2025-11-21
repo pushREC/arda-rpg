@@ -4,6 +4,8 @@ import { Cinzel, Lora } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "sonner"
 import { SoundProvider } from "@/components/sound-provider"
+import { ErrorBoundary } from "@/components/error-boundary"
+import { GameProvider } from "@/lib/game-context"
 import "./globals.css"
 
 const cinzel = Cinzel({
@@ -47,10 +49,14 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${cinzel.className}`}>
       <body className={`${lora.className} antialiased`}>
-        <SoundProvider>
-          {children}
-        </SoundProvider>
-        <Toaster />
+        <ErrorBoundary>
+          <GameProvider>
+            <SoundProvider>
+              {children}
+            </SoundProvider>
+            <Toaster />
+          </GameProvider>
+        </ErrorBoundary>
         <Analytics />
       </body>
     </html>

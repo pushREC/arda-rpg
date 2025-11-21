@@ -14,7 +14,7 @@ import { Coins, ShoppingBag, Sparkles } from "lucide-react"
 import { VALID_ITEM_KEYWORDS } from "@/lib/rules"
 import type { MerchantItem, InventoryItem } from "@/lib/types"
 import { toast } from "sonner"
-import { useGameStore } from "@/lib/game-state"
+import { useGame } from "@/lib/game-context"
 import { generateUUID } from "@/lib/utils"
 import { generateItemStats, generateItemEffect, MAX_INVENTORY_SIZE } from "@/lib/game-logic"
 import { cn } from "@/lib/utils"
@@ -92,8 +92,9 @@ function convertMerchantItemToInventory(item: MerchantItem): InventoryItem {
 
 export function MerchantModal({ isOpen, onClose, characterGold, onPurchaseComplete }: MerchantModalProps) {
   const [shopInventory, setShopInventory] = React.useState<MerchantItem[]>([])
-  const store = useGameStore()
-  const inventoryCount = useGameStore(state => state.character?.inventory.length || 0)
+  // [TICKET 18.5] Migrated from Zustand to React Context
+  const { character, addGold, addInventoryItem } = useGame()
+  const inventoryCount = character?.inventory.length || 0
   const isInventoryFull = inventoryCount >= MAX_INVENTORY_SIZE
 
   // Generate shop inventory on mount
@@ -119,12 +120,12 @@ export function MerchantModal({ isOpen, onClose, characterGold, onPurchaseComple
       return
     }
 
-    // Deduct gold from Zustand store
-    store.addGold(-item.price)
+    // [TICKET 18.5] Deduct gold using React Context
+    addGold(-item.price)
 
-    // Add item to inventory
+    // Add item to inventory using React Context
     const inventoryItem = convertMerchantItemToInventory(item)
-    store.addInventoryItem(inventoryItem)
+    addInventoryItem(inventoryItem)
 
     // Remove item from shop inventory (prevent buying twice)
     setShopInventory((prev) => prev.filter((i) => i.id !== item.id))
