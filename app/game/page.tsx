@@ -1276,7 +1276,7 @@ What will you do?`
           advantage={(diceConfig as any).advantage}
           currentHealth={currentHealth}
           maxHealth={character?.maxHealth}
-          statValue={currentStats?.[diceConfig.statName?.toLowerCase() as keyof typeof currentStats] || character?.stats?.[diceConfig.statName?.toLowerCase() as keyof typeof character.stats] || 10}
+          statValue={currentStats?.[diceConfig.statName?.toLowerCase() as keyof typeof currentStats] || character?.stats?.[diceConfig.statName?.toLowerCase() as keyof typeof character.stats] || 5}
         />
       )}
 
