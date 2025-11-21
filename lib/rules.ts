@@ -7,7 +7,7 @@
  * DO NOT use magic numbers anywhere else in the codebase.
  */
 
-import type { CharacterStats } from "./types"
+import type { CharacterStats, InventoryItem, ActiveEffect, Companion } from "./types"
 
 // ============================================================================
 // STAT SYSTEM - The "Middle-earth Math" (3-8 Scale)
@@ -95,22 +95,25 @@ export type DamageResult = {
 }
 
 /**
- * Calculates damage from a damage tier.
+ * Calculates damage from a damage tier with level scaling.
+ *
+ * Formula: base damage + scaling bonus
+ * Scaling: +1 damage every 2 levels (floors at integer)
  *
  * @param tier - The damage tier (TRIVIAL, STANDARD, DANGEROUS, LETHAL)
  * @param variance - If true, returns random value in range. If false, returns average.
- * @returns The damage amount (simple number for MVP)
+ * @param level - Character level for scaling (default: 1)
+ * @returns The damage amount with level scaling applied
  */
-export function calculateDamage(tier: DamageTier, variance: boolean = true): number {
+export function calculateDamage(tier: DamageTier, variance: boolean = true, level: number = 1): number {
   const tierData = DAMAGE_TIERS[tier]
+  const scaling = Math.floor((level - 1) * 0.5) // +1 damage every 2 levels
 
-  if (variance) {
-    // Random damage between min and max (inclusive)
-    return Math.floor(Math.random() * (tierData.max - tierData.min + 1)) + tierData.min
-  } else {
-    // Average damage (useful for AI decision-making)
-    return Math.floor((tierData.min + tierData.max) / 2)
-  }
+  const base = variance
+    ? Math.floor(Math.random() * (tierData.max - tierData.min + 1)) + tierData.min
+    : Math.floor((tierData.min + tierData.max) / 2)
+
+  return base + scaling
 }
 
 /**
@@ -460,14 +463,97 @@ export const TRADE_CONFIG = {
  * These bonuses are applied when a companion joins the party.
  * The keyword is matched against the companion's name or description.
  */
-export const COMPANION_BONUSES = {
-  ranger: { stat: "valor", bonus: 2 },
-  warrior: { stat: "valor", bonus: 2 },
-  scholar: { stat: "lore", bonus: 2 },
-  rogue: { stat: "craft", bonus: 2 },
-  guide: { stat: "wisdom", bonus: 2 },
-  merchant: { stat: "fellowship", bonus: 2 },
+export const COMPANION_BONUSES: Record<string, { stat: keyof CharacterStats; bonus: number }> = {
+  Ranger: { stat: "valor", bonus: 2 },
+  Scholar: { stat: "lore", bonus: 2 },
+  Merchant: { stat: "fellowship", bonus: 2 },
+  Warrior: { stat: "valor", bonus: 2 },
+  Guide: { stat: "wisdom", bonus: 2 },
+  Rogue: { stat: "craft", bonus: 2 },
+  Guardian: { stat: "endurance", bonus: 2 },
 } as const
+
+/**
+ * Gets the stat bonus from companions for a specific action stat.
+ *
+ * Only ONE companion bonus applies (the first match).
+ *
+ * @param companions - The character's companions
+ * @param actionStat - The stat being used for the action
+ * @returns The bonus value (0 if no match)
+ */
+export function getCompanionBonus(companions: Companion[], actionStat: keyof CharacterStats): number {
+  for (const companion of companions) {
+    // Check if companion name or description matches a bonus type
+    for (const [type, bonus] of Object.entries(COMPANION_BONUSES)) {
+      const nameLower = companion.name.toLowerCase()
+      const descLower = companion.description.toLowerCase()
+      const typeLower = type.toLowerCase()
+
+      if (nameLower.includes(typeLower) || descLower.includes(typeLower)) {
+        if (bonus.stat === actionStat) {
+          return bonus.bonus
+        }
+      }
+    }
+  }
+  return 0
+}
+
+/**
+ * Gets the stat bonus from active effects for a specific stat.
+ *
+ * Sums all buffs that affect the given stat.
+ *
+ * @param effects - Active effects on the character
+ * @param stat - The stat to check
+ * @returns The total bonus from all effects
+ */
+export function getActiveEffectBonus(effects: ActiveEffect[], stat: keyof CharacterStats): number {
+  return effects
+    .filter((effect) => effect.stat === stat)
+    .reduce((total, effect) => total + effect.value, 0)
+}
+
+// ============================================================================
+// RACE ABILITIES - The "Advantage" System
+// ============================================================================
+
+/**
+ * Race-specific advantages for certain action types or stats.
+ *
+ * When a character's race grants advantage on a roll, they can roll twice
+ * and take the better result (or get a bonus, depending on implementation).
+ *
+ * - Elf: Keen Senses (advantage on wisdom, investigation)
+ * - Hobbit: Brave/Small (advantage on survival, stealth)
+ * - Dwarf: Stone-cunning (advantage on endurance, craft)
+ * - Human: Versatile (advantage on fellowship, valor)
+ */
+export const RACE_ABILITIES: Record<string, { advantage: string[] }> = {
+  elf: { advantage: ["wisdom", "investigation"] },
+  hobbit: { advantage: ["survival", "stealth"] },
+  dwarf: { advantage: ["endurance", "craft"] },
+  human: { advantage: ["fellowship", "valor"] },
+} as const
+
+/**
+ * Determines if a character should roll with advantage based on their race.
+ *
+ * @param race - The character's race
+ * @param actionType - The type of action being performed
+ * @param stat - The stat being used for the action
+ * @returns true if the race grants advantage for this action/stat
+ */
+export function shouldRollAdvantage(race: string, actionType: string, stat: keyof CharacterStats): boolean {
+  const raceAbilities = RACE_ABILITIES[race.toLowerCase()]
+  if (!raceAbilities) return false
+
+  // Check if actionType or stat matches any advantage
+  return raceAbilities.advantage.some((adv) => {
+    return adv === actionType.toLowerCase() || adv === stat.toLowerCase()
+  })
+}
 
 // ============================================================================
 // STAT CONSTRAINTS & VALIDATION
@@ -501,6 +587,50 @@ export function validateStats(stats: CharacterStats): boolean {
  */
 export function clampStat(value: number): number {
   return Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, value))
+}
+
+/**
+ * Calculates derived stats from base stats, equipment, and active effects.
+ *
+ * This is the CORE STAT CALCULATION ENGINE that prevents "Stat Drift".
+ * All stat modifications MUST go through this function.
+ *
+ * Formula: derived = base + equipment bonuses + effect bonuses
+ *
+ * @param baseStats - The character's base stats (naked, no equipment)
+ * @param inventory - The character's inventory (equipped items add bonuses)
+ * @param activeEffects - Active buffs/debuffs affecting the character
+ * @returns Calculated effective stats
+ */
+export function calculateDerivedStats(
+  baseStats: CharacterStats,
+  inventory: InventoryItem[],
+  activeEffects: ActiveEffect[]
+): CharacterStats {
+  // Clone base stats to avoid mutation
+  const current: CharacterStats = { ...baseStats }
+
+  // Add equipment bonuses (only equipped items)
+  inventory.forEach((item) => {
+    if (item.equipped && item.stats) {
+      Object.entries(item.stats).forEach(([stat, value]) => {
+        if (value !== undefined) {
+          current[stat as keyof CharacterStats] += value
+        }
+      })
+    }
+  })
+
+  // Add active effect bonuses
+  activeEffects.forEach((effect) => {
+    if (effect.type === "buff" && effect.stat && effect.value) {
+      current[effect.stat] += effect.value
+    }
+  })
+
+  // NOTE: Do NOT clamp derived stats - equipment can push you past base limits (3-8)
+  // Only base stats should be clamped during character creation/leveling
+  return current
 }
 
 // ============================================================================
