@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Button } from "@/components/ui/button"
-import { Heart, Volume2, VolumeX, Menu, Trophy, Save } from "lucide-react"
+import { Heart, Volume2, VolumeX, Menu, Trophy, Save, Tent } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CombatOverlay } from "@/components/combat-overlay"
 import type { CombatState } from "@/lib/types"
@@ -18,6 +18,7 @@ interface GameShellProps {
   onMenuClick?: () => void
   onViewAchievements?: () => void
   onSaveGame?: () => void
+  onRest?: () => void
 }
 
 export function GameShell({
@@ -31,6 +32,7 @@ export function GameShell({
   onMenuClick,
   onViewAchievements,
   onSaveGame,
+  onRest,
 }: GameShellProps) {
   const [isMuted, setIsMuted] = React.useState(false)
   const [showCharacterPanel, setShowCharacterPanel] = React.useState(false)
@@ -85,6 +87,17 @@ export function GameShell({
                   </div>
                 </div>
               </div>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onRest}
+                title="Rest to heal (Risks ambush)"
+                disabled={combatState?.isActive || health >= maxHealth}
+                className="hover:bg-[hsl(35,40%,85%)] hidden sm:flex disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Tent className="h-5 w-5 text-[hsl(200,60%,40%)]" />
+              </Button>
 
               <Button
                 variant="ghost"

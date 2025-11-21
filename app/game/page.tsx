@@ -34,7 +34,8 @@ import {
   validateAIResponse,
   validateGameData,
 } from "@/lib/game-logic"
-import { getStatModifier } from "@/lib/rules"
+import { getStatModifier, calculateDerivedStats, shouldRollAdvantage, getCompanionBonus, getActiveEffectBonus } from "@/lib/rules"
+import { generateUUID } from "@/lib/utils"
 import { modalQueue } from "@/lib/modal-queue"
 import { NotificationManager, useNotifications } from "@/components/notification-manager"
 import { useGameStore } from "@/lib/game-state"
@@ -86,6 +87,17 @@ function GamePageContent() {
 
   const isInCombat =
     storyEntries.length > 0 && storyEntries[storyEntries.length - 1]?.text?.toLowerCase().includes("combat")
+
+  // [TICKET 7.2] Calculate derived stats from baseStats + equipment + effects
+  const currentStats = React.useMemo(() => {
+    if (!character) return null
+    // Use baseStats if available (Sprint 6+), fallback to stats for backward compatibility
+    return calculateDerivedStats(
+      character.baseStats || character.stats,
+      character.inventory,
+      activeEffects
+    )
+  }, [character, activeEffects])
 
   const handleUseItem = React.useCallback(
     (item: InventoryItem) => {
@@ -290,7 +302,7 @@ function GamePageContent() {
 
   const handleSaveGame = React.useCallback(() => {
     const result = saveGame({
-      id: Date.now().toString(),
+      id: generateUUID(),
       characterName: character.name,
       scenario: scenario.title,
       timestamp: new Date(),
@@ -298,13 +310,12 @@ function GamePageContent() {
       maxHealth: character.maxHealth,
       turnCount: storyEntries.filter((e) => e.type === "action").length,
       character,
-      scenario,
       storyEntries,
       currentXP,
       currentLevel,
       choiceCount,
       activeEffects,
-    })
+    } as any)
 
     if (result.success) {
       toast.success("Game saved successfully")
@@ -336,6 +347,73 @@ function GamePageContent() {
       })
     }
   }, [])
+
+  const handleRest = React.useCallback(async () => {
+    if (isInCombat) {
+      toast.error("Cannot rest during combat!")
+      return
+    }
+
+    if (currentHealth >= character.maxHealth) {
+      toast.info("Already at full health")
+      return
+    }
+
+    setIsLoading(true)
+    addStoryEntry("action", "You decide to set up camp and rest for a while.")
+
+    try {
+      const response = await fetch("/api/process-turn", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          character,
+          scenario,
+          storyHistory: storyEntries,
+          playerChoice: "I decide to set up camp and rest for a while.",
+          actionType: "survival",
+          customConfig: scenario.customConfig,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to process rest: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+
+      const validation = validateAIResponse(data)
+      if (!validation.valid) {
+        throw new Error(validation.error)
+      }
+
+      const { narrative, choices, stateChanges } = data
+
+      const parsedChanges = parseStateChanges(narrative)
+      const combinedChanges = { ...parsedChanges, ...stateChanges }
+
+      if (combinedChanges.health !== undefined) {
+        const healthChange = combinedChanges.health
+        setCurrentHealth((prev) => Math.max(0, Math.min(character.maxHealth, prev + healthChange)))
+
+        if (healthChange > 0) {
+          addNotification("health", healthChange)
+        } else if (healthChange < 0) {
+          addNotification("damage", Math.abs(healthChange))
+        }
+      }
+
+      addStoryEntry("narration", narrative)
+      setCurrentChoices(choices)
+      setIsLoading(false)
+    } catch (error) {
+      console.error("[v0] Failed to process rest:", error)
+      toast.error("Failed to rest", {
+        description: "Please try again",
+      })
+      setIsLoading(false)
+    }
+  }, [character, scenario, storyEntries, isInCombat, currentHealth, addNotification])
 
   const startGame = async (charData: any, scenarioData: any) => {
     setIsLoading(true)
@@ -472,7 +550,7 @@ What will you do?`
 
   const addStoryEntry = (type: StoryEntry["type"], text: string) => {
     const entry: StoryEntry = {
-      id: Date.now().toString() + Math.random(),
+      id: generateUUID(),
       type,
       text,
       timestamp: new Date(),
@@ -517,8 +595,21 @@ What will you do?`
     setCurrentChoices([])
 
     if (enhancedChoice?.requiresRoll && enhancedChoice.stat && enhancedChoice.dc) {
-      const statValue = character?.stats?.[enhancedChoice.stat] || 10
+      // [TICKET 7.2] Use derived stats instead of raw stats
+      const statValue = currentStats?.[enhancedChoice.stat] || character?.stats?.[enhancedChoice.stat] || 10
       const modifier = getStatModifier(statValue)
+
+      // [TICKET 7.2] Calculate companion and effect bonuses
+      const companionBonus = getCompanionBonus(character.companions || [], enhancedChoice.stat)
+      const effectBonus = getActiveEffectBonus(activeEffects, enhancedChoice.stat)
+      const totalBonus = companionBonus + effectBonus
+
+      // [TICKET 7.2] Check for advantage
+      const hasAdvantage = shouldRollAdvantage(
+        character.race,
+        enhancedChoice.actionType,
+        enhancedChoice.stat
+      )
 
       const statDisplayNames: Record<string, string> = {
         valor: "Valor",
@@ -530,20 +621,21 @@ What will you do?`
       }
 
       setTimeout(() => {
+        const statName = enhancedChoice.stat ? (statDisplayNames[enhancedChoice.stat] || enhancedChoice.stat) : "Unknown"
         triggerDiceRoll(
           (total) => {
-            const roll = total - modifier // Extract base roll
+            const roll = total - modifier - totalBonus // Extract base roll
             const success = total >= enhancedChoice.dc!
 
             // Immediate feedback toast BEFORE narrative
             if (success) {
-              toast.success(`Roll ${roll} + ${modifier} = ${total} (DC ${enhancedChoice.dc})`, {
+              toast.success(`Roll ${roll} + ${modifier} + ${totalBonus} = ${total} (DC ${enhancedChoice.dc})`, {
                 description: "Success!",
               })
               addStoryEntry("narration", "Success! Your skill sees you through.")
               continueStoryAfterChoice(choiceText, true)
             } else {
-              toast.error(`Roll ${roll} + ${modifier} = ${total} (DC ${enhancedChoice.dc})`, {
+              toast.error(`Roll ${roll} + ${modifier} + ${totalBonus} = ${total} (DC ${enhancedChoice.dc})`, {
                 description: "Failed!",
               })
               addStoryEntry("narration", "The attempt fails. Things take a turn for the worse...")
@@ -552,8 +644,10 @@ What will you do?`
           },
           20,
           modifier,
-          `Test your ${statDisplayNames[enhancedChoice.stat] || enhancedChoice.stat} to succeed`,
-          statDisplayNames[enhancedChoice.stat],
+          `Test your ${statName} to succeed`,
+          statName,
+          totalBonus,
+          hasAdvantage,
         )
       }, 500)
       return
@@ -896,8 +990,10 @@ What will you do?`
     modifier = 0,
     reason = "Roll to determine the outcome",
     statName?: string,
+    bonus = 0,
+    advantage = false,
   ) => {
-    setDiceConfig({ type, modifier, reason, statName } as any)
+    setDiceConfig({ type, modifier, reason, statName, bonus, advantage } as any)
     setShowDiceRoller(true)
     setDiceCallback(() => callback)
   }
@@ -973,6 +1069,7 @@ What will you do?`
         onMenuClick={() => setShowCharacterDrawer(true)}
         onViewAchievements={() => setShowAchievements(true)}
         onSaveGame={() => setShowSaveLoad(true)}
+        onRest={handleRest}
       >
         <div className="flex flex-1 overflow-hidden flex-col lg:flex-row">
           <div className="flex-1 flex flex-col overflow-hidden">
@@ -999,7 +1096,7 @@ What will you do?`
           <aside className="hidden lg:block lg:w-72 flex-shrink-0 border-l-2 border-[hsl(35,40%,70%)] bg-[hsl(50,80%,95%)]">
             <div className="h-full overflow-y-auto p-3">
               <CharacterPanel
-                character={character}
+                character={currentStats ? { ...character, stats: currentStats } : character}
                 currentHealth={currentHealth}
                 onViewAchievements={() => setShowAchievements(true)}
                 onItemClick={(item) => {
@@ -1013,7 +1110,7 @@ What will you do?`
       </GameShell>
 
       <CharacterDrawer
-        character={character}
+        character={currentStats ? { ...character, stats: currentStats } : character}
         currentHealth={currentHealth}
         isOpen={showCharacterDrawer}
         onClose={() => setShowCharacterDrawer(false)}
@@ -1040,6 +1137,8 @@ What will you do?`
           modifier={diceConfig.modifier}
           reason={diceConfig.reason}
           statName={(diceConfig as any).statName}
+          bonus={(diceConfig as any).bonus}
+          advantage={(diceConfig as any).advantage}
         />
       )}
 
