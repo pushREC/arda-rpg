@@ -33,40 +33,9 @@ import {
   canAddToInventory,
   validateAIResponse,
   validateGameData,
+  applyLevelUp,
+  processTurnEffects,
 } from "@/lib/game-logic"
-
-// [SPRINT 11] Temporary mocks for Dev A's parallel work
-// TODO: Remove these mocks once Dev A merges applyLevelUp and processTurnEffects
-const applyLevelUp = (character: any, statIncreases: any) => {
-  // Mock: Just return character with updated baseStats
-  const updatedBaseStats = { ...character.baseStats }
-  Object.entries(statIncreases).forEach(([stat, increase]: [string, any]) => {
-    if (updatedBaseStats[stat as keyof typeof updatedBaseStats]) {
-      updatedBaseStats[stat as keyof typeof updatedBaseStats] += increase
-    }
-  })
-  return {
-    ...character,
-    baseStats: updatedBaseStats,
-    stats: updatedBaseStats, // Simplified - real version recalculates with equipment
-  }
-}
-
-const processTurnEffects = (character: any, activeEffects: any[]) => {
-  // Mock: Decrement turn counters and return expired effects
-  const expiredEffects: string[] = []
-  const updatedEffects = activeEffects.map((effect) => {
-    const newEffect = { ...effect, remainingTurns: effect.remainingTurns - 1 }
-    if (newEffect.remainingTurns <= 0) {
-      expiredEffects.push(effect.name)
-    }
-    return newEffect
-  })
-  return {
-    character, // Mock doesn't modify character
-    expiredEffects,
-  }
-}
 import { getStatModifier, calculateDerivedStats, shouldRollAdvantage, getCompanionBonus, getActiveEffectBonus } from "@/lib/rules"
 import { generateUUID } from "@/lib/utils"
 import { modalQueue } from "@/lib/modal-queue"
