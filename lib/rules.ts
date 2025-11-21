@@ -470,6 +470,7 @@ export const COMPANION_BONUSES: Record<string, { stat: keyof CharacterStats; bon
   Warrior: { stat: "valor", bonus: 2 },
   Guide: { stat: "wisdom", bonus: 2 },
   Rogue: { stat: "craft", bonus: 2 },
+  Guardian: { stat: "endurance", bonus: 2 },
 } as const
 
 /**
