@@ -19,6 +19,7 @@ import {
   calculateFinalStats,
   calculateStartingHP,
 } from "@/lib/character-data"
+import { calculateDerivedStats } from "@/lib/rules"
 import { InventoryItemCard } from "@/components/inventory-item"
 import { WizardProgress } from "@/components/wizard-progress"
 import { NavigationFooter } from "@/components/navigation-footer"
@@ -88,6 +89,86 @@ export default function CharacterCreationPage() {
     const backgroundData = BACKGROUNDS[selectedBackground]
     const startingHP = calculateStartingHP(finalStats.endurance)
 
+    // 1. Generate raw inventory (existing logic)
+    const rawInventory = backgroundData.equipment.map((item, idx) => {
+      // Detect item type based on name keywords
+      const itemLower = item.toLowerCase()
+      let type: InventoryItem["type"] = "quest"
+
+      // TICKET 18.1: Detect accessories (ring, amulet, cloak)
+      if (
+        itemLower.includes("ring") ||
+        itemLower.includes("amulet") ||
+        itemLower.includes("necklace") ||
+        itemLower.includes("pendant") ||
+        itemLower.includes("cloak") ||
+        itemLower.includes("cape") ||
+        itemLower.includes("brooch")
+      ) {
+        type = "accessory"
+      } else if (
+        itemLower.includes("sword") ||
+        itemLower.includes("bow") ||
+        itemLower.includes("knife") ||
+        itemLower.includes("staff") ||
+        itemLower.includes("dagger") ||
+        itemLower.includes("axe") ||
+        itemLower.includes("mace") ||
+        itemLower.includes("hammer")
+      ) {
+        type = "weapon"
+      } else if (
+        itemLower.includes("armor") ||
+        itemLower.includes("shield") ||
+        itemLower.includes("chainmail") ||
+        itemLower.includes("helmet")
+      ) {
+        type = "armor"
+      }
+
+      // TICKET 18.1: Generate stats for all functional gear (weapons, armor, accessories)
+      const stats =
+        type === "weapon" || type === "armor" || type === "accessory"
+          ? generateItemStats(itemLower, "common")
+          : undefined
+
+      return {
+        id: `item-${idx}`,
+        name: item,
+        description: `Starting equipment from ${backgroundData.name} background`,
+        type,
+        quantity: 1,
+        value: 0,
+        stats,
+      }
+    })
+
+    // 2. Auto-Equip Logic (TICKET 19.1)
+    let hasWeapon = false
+    let hasArmor = false
+
+    const equippedInventory = rawInventory.map((item) => {
+      // Auto-equip first weapon found
+      if (item.type === "weapon" && !hasWeapon) {
+        hasWeapon = true
+        return { ...item, equipped: true }
+      }
+      // Auto-equip first armor found
+      if (item.type === "armor" && !hasArmor) {
+        hasArmor = true
+        return { ...item, equipped: true }
+      }
+      return item
+    })
+
+    // 3. Recalculate Stats based on auto-equipped gear (TICKET 19.1)
+    const startingStats = calculateDerivedStats(
+      finalStats, // This is the baseStats calculated earlier in the component
+      equippedInventory,
+      [] // No active effects at start
+    )
+
+    // 4. Construct final Character object
     const character = {
       id: crypto.randomUUID(),
       name: characterName,
@@ -95,64 +176,13 @@ export default function CharacterCreationPage() {
       background: selectedBackground,
       raceAbility: raceData.ability,
       baseStats: finalStats, // Base stats (naked, no equipment)
-      stats: finalStats, // Initially same as baseStats (no equipment yet)
+      stats: startingStats, // USE RECALCULATED STATS (TICKET 19.1)
       level: 1,
       experience: 0,
       health: startingHP,
       maxHealth: startingHP,
       gold: backgroundData.startingGold,
-      inventory: backgroundData.equipment.map((item, idx) => {
-        // Detect item type based on name keywords
-        const itemLower = item.toLowerCase()
-        let type: InventoryItem["type"] = "quest"
-
-        // TICKET 18.1: Detect accessories (ring, amulet, cloak)
-        if (
-          itemLower.includes("ring") ||
-          itemLower.includes("amulet") ||
-          itemLower.includes("necklace") ||
-          itemLower.includes("pendant") ||
-          itemLower.includes("cloak") ||
-          itemLower.includes("cape") ||
-          itemLower.includes("brooch")
-        ) {
-          type = "accessory"
-        } else if (
-          itemLower.includes("sword") ||
-          itemLower.includes("bow") ||
-          itemLower.includes("knife") ||
-          itemLower.includes("staff") ||
-          itemLower.includes("dagger") ||
-          itemLower.includes("axe") ||
-          itemLower.includes("mace") ||
-          itemLower.includes("hammer")
-        ) {
-          type = "weapon"
-        } else if (
-          itemLower.includes("armor") ||
-          itemLower.includes("shield") ||
-          itemLower.includes("chainmail") ||
-          itemLower.includes("helmet")
-        ) {
-          type = "armor"
-        }
-
-        // TICKET 18.1: Generate stats for all functional gear (weapons, armor, accessories)
-        const stats =
-          type === "weapon" || type === "armor" || type === "accessory"
-            ? generateItemStats(itemLower, "common")
-            : undefined
-
-        return {
-          id: `item-${idx}`,
-          name: item,
-          description: `Starting equipment from ${backgroundData.name} background`,
-          type,
-          quantity: 1,
-          value: 0,
-          stats,
-        }
-      }),
+      inventory: equippedInventory, // USE EQUIPPED INVENTORY (TICKET 19.1)
       companions: [],
       combat: {
         isActive: false,
