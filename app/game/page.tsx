@@ -33,6 +33,8 @@ import {
   canAddToInventory,
   validateAIResponse,
   validateGameData,
+  applyLevelUp,
+  processTurnEffects,
 } from "@/lib/game-logic"
 import { getStatModifier, calculateDerivedStats, shouldRollAdvantage, getCompanionBonus, getActiveEffectBonus } from "@/lib/rules"
 import { generateUUID } from "@/lib/utils"
@@ -832,6 +834,44 @@ What will you do?`
       const parsedChanges = parseStateChanges(narrative)
       const combinedChanges = { ...parsedChanges, ...stateChanges }
 
+      // [SPRINT 11 - TICKET 11.1] Wire Combat Loop
+      let updatedCharacter = { ...character }
+
+      // Check if API forced a combat start (Sprint 8 logic)
+      if (data.startCombat) {
+        const newCombatState = {
+          isActive: true,
+          enemyId: data.startCombat.enemyId,
+          enemyName: data.startCombat.enemyName,
+          enemyHpCurrent: data.startCombat.enemyHpMax,
+          enemyHpMax: data.startCombat.enemyHpMax,
+          roundCount: 1,
+        }
+        // Merge into character updates
+        updatedCharacter.combat = newCombatState
+        addNotification("damage", 0) // Trigger visual update
+        toast.error(`Combat Started: ${data.startCombat.enemyName}!`)
+      }
+
+      // Check for round updates (damage, turns)
+      if (data.stateChanges?.combatUpdate) {
+        const currentCombat = character.combat || {}
+        updatedCharacter.combat = {
+          ...currentCombat,
+          ...data.stateChanges.combatUpdate,
+        }
+
+        // Visual Feedback for Enemy Damage
+        if (
+          character.combat?.enemyHpCurrent &&
+          updatedCharacter.combat.enemyHpCurrent !== undefined &&
+          character.combat.enemyHpCurrent > updatedCharacter.combat.enemyHpCurrent
+        ) {
+          const dmg = character.combat.enemyHpCurrent - updatedCharacter.combat.enemyHpCurrent
+          toast.success(`Enemy took ${dmg} damage!`)
+        }
+      }
+
       if (combinedChanges.health !== undefined) {
         const healthChange = combinedChanges.health
         setCurrentHealth((prev) => Math.max(0, Math.min(character.maxHealth, prev + healthChange)))
@@ -852,12 +892,10 @@ What will you do?`
         const goldChange = combinedChanges.gold
         addNotification("gold", goldChange)
 
-        const updatedCharacter = {
-          ...character,
+        updatedCharacter = {
+          ...updatedCharacter,
           gold: (character.gold || 0) + goldChange,
         }
-        setCharacter(updatedCharacter)
-        localStorage.setItem("character", JSON.stringify(updatedCharacter))
       }
 
       if (combinedChanges.xp !== undefined) {
@@ -887,12 +925,10 @@ What will you do?`
         const itemsToAdd = combinedChanges.inventory || []
 
         if (canAddToInventory(character.inventory)) {
-          const updatedCharacter = {
-            ...character,
+          updatedCharacter = {
+            ...updatedCharacter,
             inventory: [...character.inventory, ...itemsToAdd],
           }
-          setCharacter(updatedCharacter)
-          localStorage.setItem("character", JSON.stringify(updatedCharacter))
 
           itemsToAdd.forEach((item: any) => {
             addNotification("item", item.name)
@@ -903,6 +939,33 @@ What will you do?`
           })
         }
       }
+
+      // [SPRINT 11 - TICKET 11.2] Wire Long-Term Memory
+      // API returns worldUpdates in stateChanges (Sprint 8)
+      if (data.stateChanges?.worldUpdates && Array.isArray(data.stateChanges.worldUpdates)) {
+        const currentWorld = scenario.customConfig?.aiContext?.worldState || []
+        // Deduplicate and append
+        const newWorld = Array.from(new Set([...currentWorld, ...data.stateChanges.worldUpdates]))
+
+        const updatedScenario = {
+          ...scenario,
+          customConfig: {
+            ...scenario.customConfig,
+            aiContext: {
+              ...scenario.customConfig.aiContext,
+              worldState: newWorld,
+            },
+          },
+        }
+
+        setScenario(updatedScenario)
+        localStorage.setItem("scenario", JSON.stringify(updatedScenario))
+        console.log("[DEV B] World State Updated:", newWorld)
+      }
+
+      // Persist updatedCharacter after all state changes
+      setCharacter(updatedCharacter)
+      localStorage.setItem("character", JSON.stringify(updatedCharacter))
 
       const turnCount = storyEntries.filter((e) => e.type === "action").length + 1
 
@@ -932,6 +995,25 @@ What will you do?`
 
       addStoryEntry("narration", narrative)
       setCurrentChoices(choices)
+
+      // [SPRINT 11 - TICKET 11.4] Wire Effect Expiration
+      // Process Effects (Decrement duration)
+      if (activeEffects.length > 0) {
+        const { character: charAfterEffects, expiredEffects } = processTurnEffects(updatedCharacter, activeEffects)
+
+        if (expiredEffects.length > 0) {
+          toast.info("Effects expired", {
+            description: expiredEffects.join(", "),
+          })
+          // Update with the version that has effects applied
+          setCharacter(charAfterEffects)
+          localStorage.setItem("character", JSON.stringify(charAfterEffects))
+
+          // Update active effects state by removing expired ones
+          setActiveEffects((prev) => prev.filter((effect) => effect.remainingTurns > 0))
+        }
+      }
+
       setIsLoading(false)
     } catch (error) {
       console.error("[v0] Failed to continue custom scenario:", error)
@@ -1203,6 +1285,21 @@ What will you do?`
           isOpen={showLevelUp}
           newLevel={currentQueuedModal.data.newLevel || currentLevel}
           onClose={() => {
+            // [SPRINT 11 - TICKET 11.3] Wire Level Up Application
+            // 1. Get the stat increases from the queued modal data
+            const increases = currentQueuedModal?.data?.statIncreases
+
+            if (increases) {
+              // 2. Apply the stats permanently
+              const leveledChar = applyLevelUp(character, increases)
+
+              // 3. Update State & Persistence
+              setCharacter(leveledChar)
+              localStorage.setItem("character", JSON.stringify(leveledChar))
+
+              toast.success("Level Up Applied! Stats increased.")
+            }
+
             setShowLevelUp(false)
             modalQueue.dismiss()
           }}
