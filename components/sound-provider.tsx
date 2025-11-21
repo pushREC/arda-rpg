@@ -21,6 +21,34 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
   const [volume, setVolumeState] = React.useState(0.5)
   const [isClient, setIsClient] = React.useState(false)
 
+  // [TICKET 18.6 FIX] Preload Audio objects to reduce latency
+  // Audio objects are stored in a ref to persist across renders without causing re-renders
+  const audioCache = React.useRef<Map<SoundType, HTMLAudioElement>>(new Map())
+
+  // [TICKET 18.6 FIX] Preload all sound assets on mount
+  React.useEffect(() => {
+    // Iterate through all SOUND_ASSETS and preload Audio objects
+    const soundTypes = Object.keys(SOUND_ASSETS) as SoundType[]
+
+    soundTypes.forEach((soundType) => {
+      const url = SOUND_ASSETS[soundType]
+      if (url && !audioCache.current.has(soundType)) {
+        try {
+          const audio = new Audio()
+          audio.preload = "auto"
+          audio.src = url
+          // Trigger load without playing
+          audio.load()
+          audioCache.current.set(soundType, audio)
+        } catch (error) {
+          console.warn(`[SoundProvider] Failed to preload sound "${soundType}":`, error)
+        }
+      }
+    })
+
+    console.debug(`[SoundProvider] Preloaded ${audioCache.current.size} audio assets`)
+  }, [])
+
   // Load persisted settings on mount (client-side only)
   React.useEffect(() => {
     setIsClient(true)
@@ -69,20 +97,33 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
       if (isMuted || !isClient) return
 
       try {
-        const url = SOUND_ASSETS[type]
-        if (!url) {
-          console.warn(`[SoundProvider] Unknown sound type: ${type}`)
-          return
+        // [TICKET 18.6 FIX] Use preloaded audio from cache for faster playback
+        const cachedAudio = audioCache.current.get(type)
+
+        if (cachedAudio) {
+          // Clone the cached audio to allow overlapping plays of the same sound
+          const audio = cachedAudio.cloneNode() as HTMLAudioElement
+          audio.volume = volume
+
+          // Play and handle any errors gracefully
+          audio.play().catch((error) => {
+            // Autoplay may be blocked by browser policy - this is expected
+            console.debug(`[SoundProvider] Could not play sound "${type}":`, error.message)
+          })
+        } else {
+          // Fallback: create new Audio if not in cache (shouldn't happen normally)
+          const url = SOUND_ASSETS[type]
+          if (!url) {
+            console.warn(`[SoundProvider] Unknown sound type: ${type}`)
+            return
+          }
+
+          const audio = new Audio(url)
+          audio.volume = volume
+          audio.play().catch((error) => {
+            console.debug(`[SoundProvider] Could not play sound "${type}":`, error.message)
+          })
         }
-
-        const audio = new Audio(url)
-        audio.volume = volume
-
-        // Play and handle any errors gracefully
-        audio.play().catch((error) => {
-          // Autoplay may be blocked by browser policy - this is expected
-          console.debug(`[SoundProvider] Could not play sound "${type}":`, error.message)
-        })
       } catch (error) {
         console.warn(`[SoundProvider] Error playing sound "${type}":`, error)
       }

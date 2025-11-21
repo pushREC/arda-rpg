@@ -103,6 +103,19 @@ export function useItem(
 
 /**
  * Maximum number of accessories that can be equipped at once.
+ *
+ * WARNING: Accessory slot limit relies on stable inventory array indexing.
+ * When a new accessory is equipped and max slots are full, the FIRST equipped
+ * accessory in the inventory array (index 0 among equipped accessories) is
+ * auto-unequipped. This creates an implicit FIFO (First-In-First-Out) behavior
+ * based on array order, NOT timestamp.
+ *
+ * If inventory array ordering changes (e.g., due to sorting, reordering features),
+ * the "oldest" accessory determination will also change. Future enhancements may
+ * require adding an `equippedAt` timestamp field to InventoryItem for explicit
+ * ordering if array stability cannot be guaranteed.
+ *
+ * @see equipItem - Implementation of the FIFO unequip logic
  */
 export const MAX_EQUIPPED_ACCESSORIES = 2
 
@@ -149,6 +162,9 @@ export function equipItem(item: InventoryItem, character: Character): Character 
       )
 
       if (equippedAccessories.length >= MAX_EQUIPPED_ACCESSORIES) {
+        // WARNING: FIFO logic based on array order - see MAX_EQUIPPED_ACCESSORIES docs
+        // The "oldest" accessory is determined by position in the inventory array (index 0),
+        // NOT by any timestamp. If array order changes, behavior will change.
         // Unequip the first (oldest) equipped accessory
         const oldestAccessoryId = equippedAccessories[0].id
         updatedInventory = updatedInventory.map((invItem) => {
