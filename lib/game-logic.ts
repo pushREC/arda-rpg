@@ -688,3 +688,48 @@ export function processTurnEffects(
     expiredEffects,
   }
 }
+
+/**
+ * Generates effect properties for consumable items based on name and rarity.
+ *
+ * SPRINT 10.1: Data Integrity Fix - Placebo Potions
+ *
+ * Logic:
+ * - Potions/Elixirs → Healing effect (15 HP base, +10 if rare)
+ * - Scrolls → Wisdom buff (+2 for 3 turns)
+ * - Other items → No effect (returns undefined)
+ *
+ * @param name - The item name (checked for keywords)
+ * @param rarity - The item rarity (affects healing amount)
+ * @returns Effect object or undefined
+ *
+ * @example
+ * generateItemEffect('Health Potion', 'common') // { type: 'heal', value: 15 }
+ * generateItemEffect('Rare Elixir', 'rare') // { type: 'heal', value: 25 }
+ * generateItemEffect('Wisdom Scroll', 'common') // { type: 'buff', stat: 'wisdom', value: 2, duration: 3 }
+ */
+export function generateItemEffect(name: string, rarity: string) {
+  const lower = name.toLowerCase()
+
+  // Healing consumables (potions, elixirs)
+  if (lower.includes("potion") || lower.includes("elixir")) {
+    return {
+      type: "heal" as const,
+      value: 15 + (rarity === "rare" ? 10 : 0),
+      duration: 0, // Instant effect (no duration)
+    }
+  }
+
+  // Buff consumables (scrolls)
+  if (lower.includes("scroll")) {
+    return {
+      type: "buff" as const,
+      stat: "wisdom" as const,
+      value: 2,
+      duration: 3, // Lasts 3 turns
+    }
+  }
+
+  // No effect for non-consumables
+  return undefined
+}

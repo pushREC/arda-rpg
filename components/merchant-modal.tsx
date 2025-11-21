@@ -16,7 +16,7 @@ import type { MerchantItem, InventoryItem } from "@/lib/types"
 import { toast } from "sonner"
 import { useGameStore } from "@/lib/game-state"
 import { generateUUID } from "@/lib/utils"
-import { generateItemStats } from "@/lib/game-logic"
+import { generateItemStats, generateItemEffect } from "@/lib/game-logic"
 
 interface MerchantModalProps {
   isOpen: boolean
@@ -85,6 +85,7 @@ function convertMerchantItemToInventory(item: MerchantItem): InventoryItem {
     equipped: false,
     consumable: item.type === "potion",
     stats: item.stats, // Include stats from merchant item (TICKET 10.1)
+    effect: generateItemEffect(item.name, item.rarity), // Generate effect for consumables (SPRINT 10.1)
   }
 }
 
