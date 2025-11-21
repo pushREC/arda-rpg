@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { generateText } from "ai"
-import type { Character, Scenario, CustomScenarioConfig, StoryEntry, DamageTier } from "@/lib/types"
+import type { Character, Scenario, CustomScenarioConfig, StoryEntry, DamageTier, CombatState } from "@/lib/types"
 import {
   PROMPT_ITEM_KEYWORDS,
   DAMAGE_TIERS,
@@ -32,6 +32,27 @@ export async function POST(request: NextRequest) {
     }
 
     // ========================================================================
+    // TICKET 4.1 & 4.2: COMBAT LOCK & QUEST CONTEXT - Extract state data
+    // ========================================================================
+    const combatState: CombatState = character.combat || {
+      isActive: false,
+      enemyId: null,
+      enemyName: null,
+      enemyHpCurrent: 0,
+      enemyHpMax: 0,
+      roundCount: 0,
+    }
+
+    // Extract quest progress from story history or state
+    const questProgress = storyHistory
+      .slice()
+      .reverse()
+      .find((entry: any) => entry.questProgress)?.questProgress || null
+
+    console.log("[DEV B] Combat State:", combatState)
+    console.log("[DEV B] Quest Progress:", questProgress)
+
+    // ========================================================================
     // TICKET 2.1: JSON SCHEMA ENFORCEMENT - Build Strict System Prompt
     // ========================================================================
     const systemPrompt = buildGameMasterPrompt(
@@ -40,7 +61,9 @@ export async function POST(request: NextRequest) {
       customConfig,
       combatIntensity,
       tones,
-      turnCount
+      turnCount,
+      combatState,
+      questProgress
     )
 
     // Build story context
@@ -85,7 +108,7 @@ Format as JSON:
     {
       "id": "choice-1",
       "text": "choice text",
-      "actionType": "combat|social|investigation|craft|narrative|stealth|survival",
+      "actionType": "combat|social|investigation|craft|narrative|stealth|survival|trade",
       "requiresRoll": boolean,
       "stat": "valor|wisdom|fellowship|craft|endurance|lore",
       "dc": number,
@@ -106,7 +129,12 @@ Format as JSON:
       "questComplete": boolean (optional)
     },
     "effects": [{"id": "...", "name": "...", "type": "buff|debuff", "value": number, "remainingTurns": number}] (optional)
-  }
+  },
+  "startCombat": {
+    "enemyId": "string",
+    "enemyName": "string",
+    "enemyHpMax": number
+  } (optional, ONLY when a new enemy appears in the narrative)
 }`
 
     // ========================================================================
@@ -151,6 +179,62 @@ Format as JSON:
       ...aiResponse.stateChanges,
       health: calculatedHealth !== 0 ? calculatedHealth : aiResponse.stateChanges?.health,
     })
+
+    // ========================================================================
+    // TICKET 4.3: STATE MIDDLEWARE - Combat Calculations & Persistence
+    // ========================================================================
+    const combatUpdate: Partial<CombatState> = {}
+
+    // Handle ongoing combat
+    if (combatState.isActive) {
+      // Increment round counter
+      combatUpdate.roundCount = combatState.roundCount + 1
+      console.log(`[DEV B] Combat Round ${combatUpdate.roundCount}`)
+
+      // Calculate player damage if attack was successful
+      if (diceRoll?.success && aiResponse.choices?.some((c: any) =>
+        c.actionType === "combat" ||
+        c.actionType === "survival" ||
+        playerChoice.toLowerCase().includes("attack") ||
+        playerChoice.toLowerCase().includes("strike") ||
+        playerChoice.toLowerCase().includes("hit")
+      )) {
+        // Calculate player damage: base damage + level bonus
+        const playerDmg = calculateDamage("STANDARD", true) + (character.level || 1)
+        const newEnemyHp = Math.max(0, combatState.enemyHpCurrent - playerDmg)
+
+        combatUpdate.enemyHpCurrent = newEnemyHp
+        console.log(`[DEV B] Player hit ${combatState.enemyName} for ${playerDmg} dmg (${combatState.enemyHpCurrent} -> ${newEnemyHp} HP)`)
+
+        // Check for enemy death
+        if (newEnemyHp === 0) {
+          combatUpdate.isActive = false
+          combatUpdate.enemyHpCurrent = 0
+          finalStateChanges.xp = (finalStateChanges.xp || 0) + 50 // Kill bonus
+          console.log(`[DEV B] ${combatState.enemyName} defeated! +50 XP bonus`)
+        }
+      } else {
+        // No damage dealt this round, preserve current HP
+        combatUpdate.enemyHpCurrent = combatState.enemyHpCurrent
+      }
+    }
+
+    // Handle new combat spawn
+    if (aiResponse.startCombat && !combatState.isActive) {
+      const { enemyId, enemyName, enemyHpMax } = aiResponse.startCombat
+      combatUpdate.isActive = true
+      combatUpdate.enemyId = enemyId
+      combatUpdate.enemyName = enemyName
+      combatUpdate.enemyHpMax = enemyHpMax
+      combatUpdate.enemyHpCurrent = enemyHpMax
+      combatUpdate.roundCount = 1
+      console.log(`[DEV B] New combat started: ${enemyName} (${enemyHpMax} HP)`)
+    }
+
+    // Add combat update to state changes if there are changes
+    if (Object.keys(combatUpdate).length > 0) {
+      finalStateChanges.combatUpdate = combatUpdate
+    }
 
     // ========================================================================
     // TICKET D.3: VICTORY CONDITION - Ensure questComplete is set at Turn 20+
@@ -230,12 +314,47 @@ function buildGameMasterPrompt(
   combatIntensity?: number,
   tones?: string[],
   turnCount?: number,
+  combatState?: CombatState,
+  questProgress?: any,
 ): string {
   const activeTones = tones || customConfig?.tones || ["epic"]
   const activeCombat = combatIntensity || customConfig?.combatFrequency || 3
 
-  return `You are the Game Master for a Middle-earth text RPG. You are a fair but firm storyteller who respects the dice and maintains game balance.
+  // ========================================================================
+  // TICKET 4.2: QUEST CONTEXT - Prevent AI memory loss
+  // ========================================================================
+  const questContext = customConfig?.questHook
+    ? `
+QUEST CONTEXT:
+- Main Objective: "${customConfig.questHook}"
+- Current Status: "${questProgress?.newObjective || questProgress?.activeObjective || 'Just started'}"
+${questProgress?.objectiveCompleted ? `- Recent Progress: Completed "${questProgress.objectiveCompleted}"` : ""}
+`
+    : ""
 
+  // ========================================================================
+  // TICKET 4.1: COMBAT LOCK - Force combat focus when active
+  // ========================================================================
+  let combatInstructions = ""
+  if (combatState?.isActive) {
+    combatInstructions = `
+🚨 COMBAT MODE ACTIVE 🚨
+ENEMY: ${combatState.enemyName}
+HP: ${combatState.enemyHpCurrent} / ${combatState.enemyHpMax}
+ROUND: ${combatState.roundCount}
+
+DIRECTIVES:
+1. The narrative MUST focus *exclusively* on the duel with ${combatState.enemyName}.
+2. Do NOT spawn new enemies or change location.
+3. If the player attacks successfully, describe the enemy taking damage.
+4. If the enemy attacks, describe the player taking damage (using consequenceTier).
+5. If the enemy dies (HP reaches 0), narrate their defeat clearly and set isActive to false.
+6. Do NOT include "startCombat" in your response - combat is already active.
+`
+  }
+
+  return `You are the Game Master for a Middle-earth text RPG. You are a fair but firm storyteller who respects the dice and maintains game balance.
+${questContext}
 CHARACTER:
 - Name: ${character.name}
 - Race: ${character.race}
@@ -266,12 +385,14 @@ ${customConfig.modifications
 `
     : ""
 }
-
+${combatInstructions}
 CRITICAL RULES FOR RESPONSES:
 
 1. ACTION TYPES (MANDATORY ENUM):
    You MUST use ONLY these actionType values:
-   - "combat" | "social" | "investigation" | "craft" | "narrative" | "stealth" | "survival"
+   - "combat" | "social" | "investigation" | "craft" | "narrative" | "stealth" | "survival" | "trade"
+
+   NOTE: Use "trade" ONLY when the player is in a shop, merchant, or safe trading hub.
 
 2. ITEM GENERATION (MANDATORY KEYWORDS):
    Generated items MUST contain one of these keywords in their name to ensure icon rendering:
