@@ -90,7 +90,8 @@ export default function CharacterCreationPage() {
     const startingHP = calculateStartingHP(finalStats.endurance)
 
     // 1. Generate raw inventory (existing logic)
-    const rawInventory = backgroundData.equipment.map((item, idx) => {
+    // 1. Generate raw inventory (existing logic)
+    const rawInventory = (backgroundData.equipment || []).map((item, idx) => {
       // Detect item type based on name keywords
       const itemLower = item.toLowerCase()
       let type: InventoryItem["type"] = "quest"
@@ -124,13 +125,27 @@ export default function CharacterCreationPage() {
         itemLower.includes("helmet")
       ) {
         type = "armor"
+      } else if (
+        itemLower.includes("potion") ||
+        itemLower.includes("elixir") ||
+        itemLower.includes("draught") ||
+        itemLower.includes("flask")
+      ) {
+        // [FIX] Add consumable type detection - map to 'potion' for type safety
+        type = "potion"
       }
 
       // TICKET 18.1: Generate stats for all functional gear (weapons, armor, accessories)
-      const stats =
-        type === "weapon" || type === "armor" || type === "accessory"
-          ? generateItemStats(itemLower, "common")
-          : undefined
+      // [FIX] Ensure generateItemStats doesn't break the map if it returns undefined
+      let stats = undefined
+      try {
+        stats =
+          type === "weapon" || type === "armor" || type === "accessory"
+            ? generateItemStats(itemLower, "common")
+            : undefined
+      } catch (error) {
+        console.warn(`[v0] Failed to generate stats for ${item}:`, error)
+      }
 
       return {
         id: `item-${idx}`,
@@ -348,8 +363,8 @@ export default function CharacterCreationPage() {
                           {"flexChoice" in race.bonuses
                             ? "+2 to any stat of your choice"
                             : Object.entries(race.bonuses)
-                                .map(([stat, val]) => `+${val} ${stat.charAt(0).toUpperCase() + stat.slice(1)}`)
-                                .join(", ")}
+                              .map(([stat, val]) => `+${val} ${stat.charAt(0).toUpperCase() + stat.slice(1)}`)
+                              .join(", ")}
                         </p>
                         <p className="text-xs text-[hsl(30,40%,40%)] pt-1">
                           <span className="font-medium">Ability:</span> {race.abilityDescription}

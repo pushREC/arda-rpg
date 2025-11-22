@@ -213,27 +213,34 @@ function GamePageContent() {
   }, [])
 
   React.useEffect(() => {
+    // [FIX] Persistence: Check for auto-save data BEFORE validating/starting new game
+    // This ensures that a page refresh restores the latest state instead of resetting
+    const autoSaveData = loadAutoSave()
+    if (autoSaveData.success && autoSaveData.data) {
+      console.log("[v0] Restoring from auto-save...")
+      toast.info("Resuming your adventure")
+      
+      // [TICKET 18.6 FIX] Restore health directly on character object
+      const restoredChar = {
+        ...autoSaveData.data.character,
+        health: autoSaveData.data.health,
+      }
+      
+      setCharacter(restoredChar)
+      setScenario(autoSaveData.data.scenario)
+      setStoryEntries(autoSaveData.data.storyEntries || [])
+      setCurrentXP(autoSaveData.data.currentXP || 0)
+      setCurrentLevel(autoSaveData.data.currentLevel || 1)
+      setChoiceCount(autoSaveData.data.choiceCount || 0)
+      setActiveEffects(autoSaveData.data.activeEffects || [])
+      return
+    }
+
     const validation = validateGameData()
 
     if (!validation.valid) {
       console.error("[v0] Game data validation failed:", validation.error)
-
-      const autoSaveData = loadAutoSave()
-      if (autoSaveData.success && autoSaveData.data) {
-        toast.info("Recovered from auto-save")
-        // [TICKET 18.6 FIX] Restore health directly on character object
-        const restoredChar = {
-          ...autoSaveData.data.character,
-          health: autoSaveData.data.health,
-        }
-        setCharacter(restoredChar)
-        setScenario(autoSaveData.data.scenario)
-        setStoryEntries(autoSaveData.data.storyEntries || [])
-        setCurrentXP(autoSaveData.data.currentXP || 0)
-        setCurrentLevel(autoSaveData.data.currentLevel || 1)
-        return
-      }
-
+      
       toast.error("Game data is missing or corrupted", {
         description: "Returning to character creation",
       })

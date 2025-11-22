@@ -351,29 +351,48 @@ Format as JSON:
     return NextResponse.json(finalResponse)
   } catch (error) {
     console.error("[DEV B] Turn processing error:", error)
+    // [FIX] Log the error details to help debug AI failures
+    if (error instanceof Error) {
+      console.error("[DEV B] Error message:", error.message)
+      console.error("[DEV B] Error stack:", error.stack)
+    }
 
     // Fallback narrative to prevent 500 errors
     // CRITICAL: Must match new schema with consequenceTier
+    // [FIX] Ensure fallback increments turn count and provides varied choices to prevent loops
     return NextResponse.json({
       narrative:
-        "The chaos of battle obscures the outcome... The path ahead remains uncertain, but you must press on.",
+        "The chaos of battle obscures the outcome... The path ahead remains uncertain, but you must press on. (AI Generation Failed - Fallback Mode)",
       choices: [
         {
           id: "fallback-1",
-          text: "Continue onward",
-          actionType: "narrative" as const,
-          requiresRoll: false,
-          riskLevel: "safe" as const,
+          text: "Press the attack despite the confusion",
+          actionType: "combat",
+          requiresRoll: true,
+          stat: "valor",
+          dc: 12,
+          riskLevel: "dangerous",
         },
         {
           id: "fallback-2",
-          text: "Take a moment to assess the situation",
-          actionType: "investigation" as const,
-          requiresRoll: false,
-          riskLevel: "safe" as const,
+          text: "Retreat and regroup",
+          actionType: "survival",
+          requiresRoll: true,
+          stat: "endurance",
+          dc: 10,
+          riskLevel: "safe",
+        },
+        {
+          id: "fallback-3",
+          text: "Look for a tactical advantage",
+          actionType: "investigation",
+          requiresRoll: true,
+          stat: "wisdom",
+          dc: 11,
+          riskLevel: "moderate",
         },
       ],
-      consequenceTier: "none" as const, // NEW: Match Sprint 2 schema
+      consequenceTier: "none", // NEW: Match Sprint 2 schema
       stateChanges: {
         health: 0, // Explicit zero (no change)
       },
@@ -455,29 +474,27 @@ CHARACTER:
 - Stats: Valor ${character.stats.valor}, Wisdom ${character.stats.wisdom}, Fellowship ${character.stats.fellowship}, Craft ${character.stats.craft}, Endurance ${character.stats.endurance}, Lore ${character.stats.lore}
 - Current Health: ${character.health}/${character.maxHealth}
 
-${
-  customConfig
-    ? `
+${customConfig
+      ? `
 CUSTOM SCENARIO DIRECTIVES (MUST BE FOLLOWED):
 - Tones: ${activeTones.join(", ")} - Maintain these emotional tones
 - Combat Frequency: ${activeCombat}/5 - ${getCombatGuidance(activeCombat)}
 - Setting: ${customConfig.location}, ${customConfig.region}
 ${customConfig.uniqueElement ? `- Unique Element: ${customConfig.uniqueElement}` : ""}
 
-${
-  customConfig.modifications && customConfig.modifications.length > 0
-    ? `
+${customConfig.modifications && customConfig.modifications.length > 0
+        ? `
 RECENT ADJUSTMENTS:
 ${customConfig.modifications
-  .slice(-3)
-  .map((m) => `Turn ${m.turnNumber}: ${m.reason} - ${JSON.stringify(m.changedFields)}`)
-  .join("\n")}
+          .slice(-3)
+          .map((m) => `Turn ${m.turnNumber}: ${m.reason} - ${JSON.stringify(m.changedFields)}`)
+          .join("\n")}
 `
-    : ""
-}
+        : ""
+      }
 `
-    : ""
-}
+      : ""
+    }
 ${combatInstructions}
 
 WORLD CONTEXT (PERSISTENT MEMORY):
